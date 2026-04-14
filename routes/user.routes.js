@@ -7,5 +7,6 @@ router.post("/register", userController.register);
 router.post("/verify-otp", userController.verifyOtp);
 router.post("/resend-otp", userController.resendOtp);
 router.post("/login", userController.login);
+router.get("/users", userController.getUsers); // 🔥 GET all users
 
 module.exports = router;

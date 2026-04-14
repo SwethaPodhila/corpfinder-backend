@@ -12,8 +12,10 @@ app.use(cors());
 app.use(express.json());
 
 const userRoutes = require("./routes/user.routes");
+const adminRoutes = require("./routes/admin.routes");
 
 app.use("/user", userRoutes);
+app.use("/admin", adminRoutes);
 
 app.get("/", (req, res) => {
     res.send("Auth API Running...");

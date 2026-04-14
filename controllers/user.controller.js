@@ -227,9 +227,23 @@ const login = async (req, res) => {
     }
 };
 
+const getUsers = async (req, res) => {
+    try {
+        const users = await User.find()
+            .select("-password -otp -otpExpiry"); // 🔐 sensitive fields remove
+
+        res.json(users);
+
+    } catch (err) {
+        console.log("GET USERS ERROR:", err);
+        res.status(500).json({ msg: "Server error" });
+    }
+};
+
 module.exports = {
     register,
     verifyOtp,
     resendOtp,
-    login
+    login,
+    getUsers
 };
