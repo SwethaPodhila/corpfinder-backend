@@ -37,6 +37,15 @@ const employeeSchema = new mongoose.Schema({
     industry: {
         type: String,
         default: null
+    },
+    description: {
+        type: String,
+        default: null
+    },
+    adminId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin",
+        required: true
     }
 }, { timestamps: true });
 

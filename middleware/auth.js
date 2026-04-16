@@ -5,7 +5,7 @@ exports.verifyAdmin = (req, res, next) => {
         console.log("🔥 Middleware hit");
 
         const authHeader = req.headers.authorization;
-        console.log("📩 Authorization Header:", authHeader);
+      //  console.log("📩 Authorization Header:", authHeader);
 
         if (!authHeader) {
             console.log("❌ No Authorization header found");
@@ -13,7 +13,7 @@ exports.verifyAdmin = (req, res, next) => {
         }
 
         const token = authHeader.split(" ")[1];
-        console.log("🎟️ Extracted Token:", token);
+        //console.log("🎟️ Extracted Token:", token);
 
         if (!token) {
             console.log("❌ Token missing after split");
@@ -22,7 +22,7 @@ exports.verifyAdmin = (req, res, next) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        console.log("✅ Decoded Token:", decoded);
+     //  console.log("✅ Decoded Token:", decoded);
 
         req.adminId = decoded.id;
         console.log("🆔 Admin ID set in req:", req.adminId);

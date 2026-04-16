@@ -167,10 +167,13 @@ export const updateCompany = async (req, res) => {
 
 export const deleteCompany = async (req, res) => {
     try {
-        const adminId = req.admin.id;
+        console.log("🔥 DELETE COMPANY HIT");
+        console.log("ADMIN ID:", req.adminId);
+
+        const adminId = req.adminId;
         const { id } = req.params;
 
-        const deleted = await Employee.findOneAndDelete({
+        const deleted = await Company.findOneAndDelete({
             _id: id,
             adminId
         });
@@ -179,9 +182,24 @@ export const deleteCompany = async (req, res) => {
             return res.status(404).json({ msg: "Not found" });
         }
 
-        res.json({ msg: "Deleted successfully" });
+        return res.json({ msg: "Deleted successfully" });
 
     } catch (err) {
-        res.status(500).json({ msg: "Server error" });
+        console.log("DELETE ERROR:", err);
+        return res.status(500).json({ msg: "Server error" });
+    }
+};
+
+export const getAllCompanies = async (req, res) => {
+    try {
+        const companies = await Company.find()
+            .populate("adminId", "username") // 🔥 only these fields from Admin
+            .sort({ createdAt: -1 });
+
+        res.json(companies);
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Server error ❌" });
     }
 };

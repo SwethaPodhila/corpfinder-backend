@@ -2,7 +2,7 @@ import XLSX from "xlsx";
 import Employee from "../models/Employee.js";
 
 /* =========================
-   ✅ SINGLE ADD
+   ✅ SINGLE ADD EMPLOYEE
 ========================= */
 export const addEmployee = async (req, res) => {
     try {
@@ -15,12 +15,23 @@ export const addEmployee = async (req, res) => {
             country,
             email,
             phone,
-            industry
+            industry,
+            description
         } = req.body;
 
-        // 🔴 Required validation
         if (!name || !designation || !company || !city || !state || !country) {
             return res.status(400).json({ msg: "Required fields missing ❗" });
+        }
+
+        const exists = await Employee.findOne({
+            name,
+            email,
+            company,
+            adminId: req.adminId
+        });
+
+        if (exists) {
+            return res.status(400).json({ msg: "Employee already exists ❗" });
         }
 
         const employee = await Employee.create({
@@ -32,19 +43,21 @@ export const addEmployee = async (req, res) => {
             country,
             email,
             phone,
-            industry
+            industry,
+            description: description || null,
+            adminId: req.adminId
         });
 
-        res.json({ msg: "Employee added", employee });
+        res.json({ msg: "Employee added ✅", employee });
 
     } catch (err) {
         console.log(err);
-        res.status(500).json({ msg: "Server error" });
+        res.status(500).json({ msg: "Server error ❌" });
     }
 };
 
 /* =========================
-   🔥 BULK UPLOAD
+   🔥 BULK UPLOAD EMPLOYEES
 ========================= */
 export const uploadEmployees = async (req, res) => {
     try {
@@ -52,7 +65,7 @@ export const uploadEmployees = async (req, res) => {
             return res.status(400).json({ msg: "No file uploaded ❗" });
         }
 
-        const workbook = XLSX.readFile(req.file.path);
+        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         let data = XLSX.utils.sheet_to_json(sheet);
 
@@ -60,7 +73,7 @@ export const uploadEmployees = async (req, res) => {
             return res.status(400).json({ msg: "Empty file ❗" });
         }
 
-        // 🔥 Normalize keys (case insensitive)
+        // normalize keys
         const normalizedData = data.map(row => {
             const newRow = {};
             Object.keys(row).forEach(key => {
@@ -84,8 +97,12 @@ export const uploadEmployees = async (req, res) => {
             const city = clean(item.city);
             const state = clean(item.state);
             const country = clean(item.country);
+            const email = clean(item.email);
+            const phone = clean(item.phone);
+            const industry = clean(item.industry);
+            const description = clean(item.description);
 
-            const identifier = `${name || "Unknown"} (${company || "No Company"})`;
+            const identifier = `${name || "Unknown"} (${email || "No Email"})`;
 
             const missingFields = [];
 
@@ -96,32 +113,18 @@ export const uploadEmployees = async (req, res) => {
             if (!state) missingFields.push("state");
             if (!country) missingFields.push("country");
 
-            // ❌ Missing fields
             if (missingFields.length > 0) {
                 errors.push(`${identifier}: Missing → ${missingFields.join(", ")}`);
                 continue;
             }
 
-            const employeeData = {
-                name,
-                designation,
-                company,
-                city,
-                state,
-                country,
-                email: clean(item.email) || null,
-                phone: clean(item.phone) || null,
-                industry: clean(item.industry) || null,
-            };
-
-            // 🔁 Duplicate check
             const exists = await Employee.findOne({
-                name: employeeData.name,
-                designation: employeeData.designation,
-                company: employeeData.company,
-                city: employeeData.city,
-                state: employeeData.state,
-                country: employeeData.country
+                email,
+                company,
+                designation,
+                state,
+                city,
+                adminId: req.adminId
             });
 
             if (exists) {
@@ -129,10 +132,21 @@ export const uploadEmployees = async (req, res) => {
                 continue;
             }
 
-            validData.push(employeeData);
+            validData.push({
+                name,
+                designation,
+                company,
+                city,
+                state,
+                country,
+                email,
+                phone,
+                industry,
+                description: description || null,
+                adminId: req.adminId
+            });
         }
 
-        // ✅ Insert only valid
         if (validData.length > 0) {
             await Employee.insertMany(validData);
         }
@@ -149,5 +163,79 @@ export const uploadEmployees = async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ msg: "Upload failed ❌" });
+    }
+};
+
+/* =========================
+   📌 GET MY EMPLOYEES
+========================= */
+export const getMyEmployees = async (req, res) => {
+    try {
+        const employees = await Employee.find({ adminId: req.adminId });
+        res.json(employees);
+    } catch (err) {
+        res.status(500).json({ msg: "Server error ❌" });
+    }
+};
+
+/* =========================
+   ✏️ UPDATE EMPLOYEE
+========================= */
+export const updateEmployee = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const updated = await Employee.findOneAndUpdate(
+            { _id: id, adminId: req.adminId },
+            req.body,
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ msg: "Employee not found ❌" });
+        }
+
+        res.json({ msg: "Employee updated ✅", employee: updated });
+
+    } catch (err) {
+        res.status(500).json({ msg: "Update failed ❌" });
+    }
+};
+
+/* =========================
+   🗑️ DELETE EMPLOYEE
+========================= */
+export const deleteEmployee = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const deleted = await Employee.findOneAndDelete({
+            _id: id,
+            adminId: req.adminId
+        });
+
+        if (!deleted) {
+            return res.status(404).json({ msg: "Employee not found ❌" });
+        }
+
+        res.json({ msg: "Deleted successfully ✅" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Server error ❌" });
+    }
+};
+
+export const getAllEmployees = async (req, res) => {
+    try {
+        const employees = await Employee.find()
+            .populate("adminId", "username") // 🔥 admin details
+            .sort({ createdAt: -1 });
+        //console.log(JSON.stringify(employees, null, 2));
+        res.json(employees);
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Server error ❌" });
     }
 };
