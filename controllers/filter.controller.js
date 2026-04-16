@@ -2,6 +2,74 @@ import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
 
 /* =========================
+   STOP WORDS (NOISE REMOVE)
+========================= */
+const STOP_WORDS = new Set([
+    "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
+    "is", "are", "of", "on", "and", "job", "role"
+]);
+
+/* =========================
+   DESIGNATION MAP (IMPORTANT FIX)
+========================= */
+const DESIGNATION_MAP = {
+    manager: ["manager", "managers"],
+    hr: ["hr", "human resource", "human resources"],
+    developer: ["developer", "software developer", "software engineer", "programmer"],
+    analyst: ["analyst", "analysts"],
+    consultant: ["consultant", "consultants"],
+    ceo: ["ceo", "chief executive officer"]
+};
+
+/* =========================
+   TOKENIZER (CLEAN INPUT)
+========================= */
+const tokenize = (text) => {
+    if (!text) return [];
+
+    return text
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(w => w && !STOP_WORDS.has(w));
+};
+
+/* =========================
+   EXPAND SYNONYMS
+========================= */
+const expandWord = (word) => {
+    for (let key in DESIGNATION_MAP) {
+        if (DESIGNATION_MAP[key].includes(word)) {
+            return DESIGNATION_MAP[key];
+        }
+    }
+    return [word];
+};
+
+/* =========================
+   SMART QUERY BUILDER
+========================= */
+const buildSmartQuery = (keywords) => {
+    if (!keywords.length) return {};
+
+    return {
+        $and: keywords.map(word => ({
+            $or: [
+                { name: new RegExp(word, "i") },
+                { designation: new RegExp(word, "i") },
+                { company: new RegExp(word, "i") },
+                { industry: new RegExp(word, "i") },
+                { city: new RegExp(word, "i") },
+                { state: new RegExp(word, "i") },
+                { country: new RegExp(word, "i") },
+                { email: new RegExp(word, "i") },
+                { description: new RegExp(word, "i") }
+            ]
+        }))
+    };
+};
+
+/* =========================
    GET FILTERS
 ========================= */
 export const getFilters = async (req, res) => {
@@ -9,9 +77,9 @@ export const getFilters = async (req, res) => {
         const industries = await Employee.distinct("industry");
         const designations = await Employee.distinct("designation");
 
-        const countries = await Company.distinct("country");
-        const states = await Company.distinct("state");
-        const cities = await Company.distinct("city");
+        const countries = await Employee.distinct("country");
+        const states = await Employee.distinct("state");
+        const cities = await Employee.distinct("city");
 
         res.json({
             industries: industries.filter(Boolean),
@@ -28,13 +96,13 @@ export const getFilters = async (req, res) => {
 };
 
 /* =========================
-   SEARCH DATA (FIXED)
+   SMART SEARCH API (FIXED)
 ========================= */
 export const searchData = async (req, res) => {
     try {
         const {
-            query,
-            type,
+            query = "",
+            type = "people",
             industry,
             designation,
             country,
@@ -42,85 +110,86 @@ export const searchData = async (req, res) => {
             city
         } = req.query;
 
-        let employeeFilter = {};
-        let companyFilter = {};
+        /* =========================
+           STEP 1: CLEAN QUERY
+        ========================= */
+        const tokens = tokenize(query);
 
         /* =========================
-           TEXT SEARCH (PARTIAL)
+           STEP 2: EXPAND DESIGNATION
         ========================= */
-        if (query && query.trim()) {
-            const words = query.trim().split(/\s+/);
+        let expanded = [];
 
-            const regexes = words.map(w => ({
-                $regex: w,
-                $options: "i"
-            }));
+        tokens.forEach(t => {
+            expanded.push(...expandWord(t));
+        });
 
-            employeeFilter.$or = [
-                { name: { $in: regexes } },
-                { company: { $in: regexes } },
-                { designation: { $in: regexes } },
-                { city: { $in: regexes } },
-                { state: { $in: regexes } }
-            ];
-
-            companyFilter.$or = [
-                { name: { $in: regexes } },
-                { description: { $in: regexes } },
-                { city: { $in: regexes } },
-                { state: { $in: regexes } }
-            ];
-        }
+        expanded = [...new Set(expanded)];
 
         /* =========================
-           FILTERS (SAFE + PARTIAL)
+           STEP 3: BUILD QUERY
         ========================= */
+        const smartQuery = buildSmartQuery(expanded);
 
-        if (industry && industry.trim()) {
-            employeeFilter.industry = {
-                $regex: industry.trim(),
-                $options: "i"
-            };
+        let employeeFilter = { ...smartQuery };
+        let companyFilter = { ...smartQuery };
+
+        /* =========================
+           STEP 4: APPLY FILTERS
+        ========================= */
+        if (industry) {
+            employeeFilter.industry = new RegExp(industry, "i");
         }
 
-        if (designation && designation.trim()) {
-            employeeFilter.designation = {
-                $regex: designation.trim(),
-                $options: "i"
-            };
+        if (designation) {
+            employeeFilter.designation = new RegExp(designation, "i");
         }
 
-        if (country && country.trim()) {
-            const regex = { $regex: country.trim(), $options: "i" };
-            employeeFilter.country = regex;
-            companyFilter.country = regex;
+        if (country) {
+            employeeFilter.country = new RegExp(country, "i");
+            companyFilter.country = new RegExp(country, "i");
         }
 
-        if (state && state.trim()) {
-            const regex = { $regex: state.trim(), $options: "i" };
-            employeeFilter.state = regex;
-            companyFilter.state = regex;
+        if (state) {
+            employeeFilter.state = new RegExp(state, "i");
+            companyFilter.state = new RegExp(state, "i");
         }
 
-        if (city && city.trim()) {
-            const regex = { $regex: city.trim(), $options: "i" };
-            employeeFilter.city = regex;
-            companyFilter.city = regex;
+        if (city) {
+            employeeFilter.city = new RegExp(city, "i");
+            companyFilter.city = new RegExp(city, "i");
         }
 
         /* =========================
-           FETCH DATA BASED ON TAB
+           STEP 5: FETCH DATA
         ========================= */
-
-        let data = [];
+        let results = [];
 
         if (type === "companies") {
-            data = await Company.find(companyFilter).sort({ createdAt: -1 });
+            results = await Company.find(companyFilter).limit(100);
         } else {
-            data = await Employee.find(employeeFilter).sort({ createdAt: -1 });
+            results = await Employee.find(employeeFilter).limit(100);
         }
 
-        res.json(data);
+        /* =========================
+           STEP 6: RELEVANCE RANKING
+        ========================= */
+        results = results.sort((a, b) => {
+            const aText = JSON.stringify(a).toLowerCase();
+            const bText = JSON.stringify(b).toLowerCase();
+
+            let aScore = 0;
+            let bScore = 0;
+
+            expanded.forEach(k => {
+                if (aText.includes(k)) aScore++;
+                if (bText.includes(k)) bScore++;
+            });
+
+            return bScore - aScore;
+        });
+
+        res.json(results);
 
     } catch (err) {
         console.log(err);
