@@ -45,18 +45,30 @@ exports.loginAdmin = async (req, res) => {
     }
 };
 
-// ➕ REGISTER (create subadmin)
 exports.registerAdmin = async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, role } = req.body;
 
-        // validation
-        if (!username || !password) {
-            return res.status(400).json({ msg: "All fields required" });
+        // 🔒 VALIDATION
+        if (!username || username.trim().length < 3) {
+            return res.status(400).json({ msg: "Username must be at least 3 characters" });
+        }
+
+        if (!password || password.length < 3) {
+            return res.status(400).json({ msg: "Password must be at least 3 characters" });
+        }
+
+        if (!role) {
+            return res.status(400).json({ msg: "Role is required" });
+        }
+
+        // 🔥 OPTIONAL SECURITY (recommended)
+        if (role === "superadmin") {
+            return res.status(403).json({ msg: "Cannot create super admin" });
         }
 
         // already exists check
-        const existing = await Admin.findOne({ username });
+        const existing = await Admin.findOne({ username: username.toLowerCase() });
 
         if (existing) {
             return res.status(400).json({ msg: "Admin already exists" });
@@ -67,13 +79,13 @@ exports.registerAdmin = async (req, res) => {
 
         // create admin
         const newAdmin = await Admin.create({
-            username: username.toLowerCase(),
+            username: username.toLowerCase().trim(),
             password: hashedPassword,
-            role: "subadmin" // default
+            role: role // 🔥 dynamic role
         });
 
         res.json({
-            msg: "Sub Admin Created Successfully",
+            msg: "Admin Created Successfully",
             admin: newAdmin
         });
 
@@ -101,17 +113,35 @@ exports.getAdmins = async (req, res) => {
 exports.updateAdmin = async (req, res) => {
     try {
         const { id } = req.params;
-        const { username, password } = req.body;
+        const { username, password, role } = req.body;
 
         let updateData = {};
 
+        // 🔒 USERNAME VALIDATION
         if (username) {
-            updateData.username = username.toLowerCase();
+            if (username.trim().length < 3) {
+                return res.status(400).json({ msg: "Username must be at least 3 characters" });
+            }
+            updateData.username = username.toLowerCase().trim();
         }
 
+        // 🔒 PASSWORD VALIDATION
         if (password) {
+            if (password.length < 3) {
+                return res.status(400).json({ msg: "Password must be at least 3 characters" });
+            }
             const hashedPassword = await bcrypt.hash(password, 10);
             updateData.password = hashedPassword;
+        }
+
+        // 🔒 ROLE UPDATE (optional but controlled)
+        if (role) {
+            // ⚠️ SECURITY (recommended)
+            if (role === "superadmin") {
+                return res.status(403).json({ msg: "Cannot assign super admin role" });
+            }
+
+            updateData.role = role;
         }
 
         const updatedAdmin = await Admin.findByIdAndUpdate(
@@ -123,6 +153,7 @@ exports.updateAdmin = async (req, res) => {
         res.json(updatedAdmin);
 
     } catch (err) {
+        console.log(err);
         res.status(500).json({ msg: "Server error" });
     }
 };
