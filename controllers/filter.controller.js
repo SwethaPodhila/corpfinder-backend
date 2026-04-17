@@ -6,7 +6,8 @@ import Company from "../models/Company.js";
 ========================= */
 const STOP_WORDS = new Set([
     "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
-    "is", "are", "of", "on", "and", "job", "role"
+    "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
+    "show", "me", "all", "any", "some", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
 ]);
 
 /* =========================
@@ -49,26 +50,31 @@ const expandWord = (word) => {
 /* =========================
    SMART QUERY BUILDER
 ========================= */
-const buildSmartQuery = (keywords) => {
-    if (!keywords.length) return {};
+const buildSmartQuery = (tokens) => {
+    if (!tokens.length) return {};
 
     return {
-        $and: keywords.map(word => ({
-            $or: [
-                { name: new RegExp(word, "i") },
-                { designation: new RegExp(word, "i") },
-                { company: new RegExp(word, "i") },
-                { industry: new RegExp(word, "i") },
-                { city: new RegExp(word, "i") },
-                { state: new RegExp(word, "i") },
-                { country: new RegExp(word, "i") },
-                { email: new RegExp(word, "i") },
-                { description: new RegExp(word, "i") }
-            ]
-        }))
+        $and: tokens.map(word => {
+            const variations = expandWord(word); // synonyms
+
+            return {
+                $or: variations.map(v => ({
+                    $or: [
+                        { name: new RegExp(v, "i") },
+                        { designation: new RegExp(v, "i") },
+                        { company: new RegExp(v, "i") },
+                        { industry: new RegExp(v, "i") },
+                        { city: new RegExp(v, "i") },
+                        { state: new RegExp(v, "i") },
+                        { country: new RegExp(v, "i") },
+                        { email: new RegExp(v, "i") },
+                        { description: new RegExp(v, "i") }
+                    ]
+                }))
+            };
+        })
     };
 };
-
 /* =========================
    GET FILTERS
 ========================= */
@@ -110,13 +116,15 @@ export const searchData = async (req, res) => {
             city
         } = req.query;
 
+
+
         /* =========================
            STEP 1: CLEAN QUERY
         ========================= */
         const tokens = tokenize(query);
 
         /* =========================
-           STEP 2: EXPAND DESIGNATION
+           STEP 2: EXPAND KEYWORDS
         ========================= */
         let expanded = [];
 
@@ -127,22 +135,28 @@ export const searchData = async (req, res) => {
         expanded = [...new Set(expanded)];
 
         /* =========================
-           STEP 3: BUILD QUERY
+           STEP 3: SMART QUERY (SAFE)
         ========================= */
-        const smartQuery = buildSmartQuery(expanded);
+        const smartQuery = tokens.length
+            ? buildSmartQuery(tokens)
+            : {};
 
+        /* =========================
+           STEP 4: BASE FILTERS
+        ========================= */
         let employeeFilter = { ...smartQuery };
         let companyFilter = { ...smartQuery };
 
-        /* =========================
-           STEP 4: APPLY FILTERS
-        ========================= */
-        if (industry) {
-            employeeFilter.industry = new RegExp(industry, "i");
-        }
+        console.log("REQ QUERY:", req.query);
+        console.log("EMP FILTER BEFORE:", employeeFilter);
 
+        // 🔥 DIRECT FILTERS (IMPORTANT FIX)
         if (designation) {
             employeeFilter.designation = new RegExp(designation, "i");
+        }
+
+        if (industry) {
+            employeeFilter.industry = new RegExp(industry, "i");
         }
 
         if (country) {
@@ -172,7 +186,7 @@ export const searchData = async (req, res) => {
         }
 
         /* =========================
-           STEP 6: RELEVANCE RANKING
+           STEP 6: RANKING
         ========================= */
         results = results.sort((a, b) => {
             const aText = JSON.stringify(a).toLowerCase();
