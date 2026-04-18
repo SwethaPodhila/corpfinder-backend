@@ -7,7 +7,7 @@ exports.loginAdmin = async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // 🔥 username OR email format check
+        // 🔥 username OR email  format check
         let admin;
 
         if (username.includes("@")) {
@@ -62,11 +62,6 @@ exports.registerAdmin = async (req, res) => {
             return res.status(400).json({ msg: "Role is required" });
         }
 
-        // 🔥 OPTIONAL SECURITY (recommended)
-        if (role === "superadmin") {
-            return res.status(403).json({ msg: "Cannot create super admin" });
-        }
-
         // already exists check
         const existing = await Admin.findOne({ username: username.toLowerCase() });
 
@@ -99,7 +94,7 @@ exports.registerAdmin = async (req, res) => {
 exports.getAdmins = async (req, res) => {
     try {
         const admins = await Admin
-            .find({ role: "subadmin" }) // 🔥 only subadmins
+            .find() // 🔥 only subadmins
             .select("-password");
 
         res.json(admins);
@@ -136,11 +131,6 @@ exports.updateAdmin = async (req, res) => {
 
         // 🔒 ROLE UPDATE (optional but controlled)
         if (role) {
-            // ⚠️ SECURITY (recommended)
-            if (role === "superadmin") {
-                return res.status(403).json({ msg: "Cannot assign super admin role" });
-            }
-
             updateData.role = role;
         }
 
