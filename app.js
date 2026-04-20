@@ -16,12 +16,14 @@ const adminRoutes = require("./routes/admin.routes");
 const employeeRoutes = require("./routes/employee.routes");
 const companyRoutes = require("./routes/company.routes");
 const filterRoutes = require("./routes/filter.routes");
+const downloadRoutes = require("./routes/dowloads.routes");
 
 app.use("/user", userRoutes);
 app.use("/admin", adminRoutes);
 app.use("/employee", employeeRoutes);
 app.use("/company", companyRoutes);
 app.use("/filters", filterRoutes);
+app.use("/downloads", downloadRoutes);
 
 app.get("/", (req, res) => {
     res.send("Auth API Running...");
