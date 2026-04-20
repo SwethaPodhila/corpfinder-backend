@@ -5,7 +5,7 @@ import Company from "../models/Company.js";
    STOP WORDS (NOISE REMOVE)
 ========================= */
 const STOP_WORDS = new Set([
-    "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
+    "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need", "find", "city", "state", "country", "industry", "designation", "work", "with",
     "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
     "show", "me", "all", "any", "some", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
 ]);
@@ -14,12 +14,21 @@ const STOP_WORDS = new Set([
    DESIGNATION MAP (IMPORTANT FIX)
 ========================= */
 const DESIGNATION_MAP = {
-    manager: ["manager", "managers"],
-    hr: ["hr", "human resource", "human resources"],
-    developer: ["developer", "software developer", "software engineer", "programmer"],
-    analyst: ["analyst", "analysts"],
-    consultant: ["consultant", "consultants"],
-    ceo: ["ceo", "chief executive officer"]
+    developer: [
+        "developer", "developers",
+        "software developer", "software developers",
+        "software engineer", "software engineers",
+        "programmer", "programmers",
+        "coder", "coders"
+    ],
+    manager: ["manager", "managers", "project manager", "project managers", "product manager", "product managers"],
+    hr: ["hr", "human resource", "human resources", "hr manager", "hr managers"],
+    analyst: ["analyst", "analysts", "data analyst", "data analysts", "business analyst", "business analysts"],
+    consultant: ["consultant", "consultants", "business consultant", "business consultants", "management consultant", "management consultants"],
+    ceo: ["ceo", "chief executive officer", "founder", "co-founder", "owner"],
+    cto: ["cto", "chief technology officer", "chief technical officer"],
+    cfo: ["cfo", "chief financial officer"],
+    coo: ["coo", "chief operating officer"],
 };
 
 /* =========================
@@ -75,31 +84,6 @@ const buildSmartQuery = (tokens) => {
         })
     };
 };
-/* =========================
-   GET FILTERS
-========================= */
-export const getFilters = async (req, res) => {
-    try {
-        const industries = await Employee.distinct("industry");
-        const designations = await Employee.distinct("designation");
-
-        const countries = await Employee.distinct("country");
-        const states = await Employee.distinct("state");
-        const cities = await Employee.distinct("city");
-
-        res.json({
-            industries: industries.filter(Boolean),
-            designations: designations.filter(Boolean),
-            countries: countries.filter(Boolean),
-            states: states.filter(Boolean),
-            cities: cities.filter(Boolean)
-        });
-
-    } catch (err) {
-        console.log(err);
-        res.status(500).json({ msg: "Failed to load filters ❌" });
-    }
-};
 
 /* =========================
    SMART SEARCH API (FIXED)
@@ -116,12 +100,20 @@ export const searchData = async (req, res) => {
             city
         } = req.query;
 
-
-
         /* =========================
            STEP 1: CLEAN QUERY
         ========================= */
         const tokens = tokenize(query);
+
+        /* =========================
+   🚨 EMPTY QUERY PROTECTION
+========================= */
+        if (!query || tokens.length === 0) {
+            return res.json({
+                msg: "Please enter a valid search keyword 🔍",
+                results: []
+            });
+        }
 
         /* =========================
            STEP 2: EXPAND KEYWORDS
@@ -208,5 +200,31 @@ export const searchData = async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ msg: "Search failed ❌" });
+    }
+};
+
+/* =========================
+   GET FILTERS
+========================= */
+export const getFilters = async (req, res) => {
+    try {
+        const industries = await Employee.distinct("industry");
+        const designations = await Employee.distinct("designation");
+
+        const countries = await Employee.distinct("country");
+        const states = await Employee.distinct("state");
+        const cities = await Employee.distinct("city");
+
+        res.json({
+            industries: industries.filter(Boolean),
+            designations: designations.filter(Boolean),
+            countries: countries.filter(Boolean),
+            states: states.filter(Boolean),
+            cities: cities.filter(Boolean)
+        });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Failed to load filters ❌" });
     }
 };
