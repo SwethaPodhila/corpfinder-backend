@@ -5,7 +5,7 @@ exports.verifyAdmin = (req, res, next) => {
         console.log("🔥 Middleware hit");
 
         const authHeader = req.headers.authorization;
-      //  console.log("📩 Authorization Header:", authHeader);
+        //  console.log("📩 Authorization Header:", authHeader);
 
         if (!authHeader) {
             console.log("❌ No Authorization header found");
@@ -22,7 +22,7 @@ exports.verifyAdmin = (req, res, next) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-     //  console.log("✅ Decoded Token:", decoded);
+        //  console.log("✅ Decoded Token:", decoded);
 
         req.adminId = decoded.id;
         console.log("🆔 Admin ID set in req:", req.adminId);
@@ -33,6 +33,27 @@ exports.verifyAdmin = (req, res, next) => {
         console.log("💥 JWT ERROR MESSAGE:", err.message);
         console.log("💥 FULL ERROR:", err);
 
+        return res.status(401).json({ msg: "Invalid token ❌" });
+    }
+};
+
+exports.verifyUser = (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(401).json({ msg: "No token ❌" });
+        }
+
+        const token = authHeader.split(" ")[1];
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        req.userId = decoded.id; // only use id
+
+        next();
+
+    } catch (err) {
         return res.status(401).json({ msg: "Invalid token ❌" });
     }
 };

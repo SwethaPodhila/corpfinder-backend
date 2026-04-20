@@ -1,12 +1,13 @@
 import Employee from "../models/Employee.js";
 import Company from "../models/Company.js";
+import SearchHistory from "../models/History.js";
 
 /* =========================
    STOP WORDS (NOISE REMOVE)
 ========================= */
 const STOP_WORDS = new Set([
     "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need", "find", "city", "state", "country", "industry", "designation", "work", "with",
-    "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
+    "iam", "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
     "show", "me", "all", "any", "some", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
 ]);
 
@@ -105,9 +106,6 @@ export const searchData = async (req, res) => {
         ========================= */
         const tokens = tokenize(query);
 
-        /* =========================
-   🚨 EMPTY QUERY PROTECTION
-========================= */
         if (!query || tokens.length === 0) {
             return res.json({
                 msg: "Please enter a valid search keyword 🔍",
@@ -119,30 +117,17 @@ export const searchData = async (req, res) => {
            STEP 2: EXPAND KEYWORDS
         ========================= */
         let expanded = [];
-
-        tokens.forEach(t => {
-            expanded.push(...expandWord(t));
-        });
-
+        tokens.forEach(t => expanded.push(...expandWord(t)));
         expanded = [...new Set(expanded)];
 
-        /* =========================
-           STEP 3: SMART QUERY (SAFE)
-        ========================= */
-        const smartQuery = tokens.length
-            ? buildSmartQuery(tokens)
-            : {};
+        const smartQuery = buildSmartQuery(tokens);
 
-        /* =========================
-           STEP 4: BASE FILTERS
-        ========================= */
         let employeeFilter = { ...smartQuery };
         let companyFilter = { ...smartQuery };
 
-        console.log("REQ QUERY:", req.query);
-        console.log("EMP FILTER BEFORE:", employeeFilter);
-
-        // 🔥 DIRECT FILTERS (IMPORTANT FIX)
+        /* =========================
+           STEP 3: DIRECT FILTERS
+        ========================= */
         if (designation) {
             employeeFilter.designation = new RegExp(designation, "i");
         }
@@ -167,7 +152,7 @@ export const searchData = async (req, res) => {
         }
 
         /* =========================
-           STEP 5: FETCH DATA
+           STEP 4: FETCH DATA
         ========================= */
         let results = [];
 
@@ -178,7 +163,7 @@ export const searchData = async (req, res) => {
         }
 
         /* =========================
-           STEP 6: RANKING
+           STEP 5: RANKING
         ========================= */
         results = results.sort((a, b) => {
             const aText = JSON.stringify(a).toLowerCase();
@@ -195,6 +180,47 @@ export const searchData = async (req, res) => {
             return bScore - aScore;
         });
 
+        /* =========================
+           STEP 6: SAVE HISTORY (FIXED)
+           - only when user exists
+           - only when results > 0
+           - no duplicates
+        ========================= */
+        if (req.userId && results.length > 0) {
+
+            const existing = await SearchHistory.findOne({
+                userId: req.userId,
+                query: query.trim()
+            });
+
+            if (!existing) {
+                await SearchHistory.create({
+                    userId: req.userId,
+                    query: query.trim(),
+                    resultCount: results.length
+                });
+            }
+
+            const count = await SearchHistory.countDocuments({
+                userId: req.userId
+            });
+
+            if (count > 30) {
+                const oldest = await SearchHistory.find({ userId: req.userId })
+                    .sort({ createdAt: 1 })
+                    .limit(count - 30);
+
+                const idsToDelete = oldest.map(item => item._id);
+
+                await SearchHistory.deleteMany({
+                    _id: { $in: idsToDelete }
+                });
+            }
+        }
+
+        /* =========================
+           FINAL RESPONSE
+        ========================= */
         res.json(results);
 
     } catch (err) {
@@ -226,5 +252,50 @@ export const getFilters = async (req, res) => {
     } catch (err) {
         console.log(err);
         res.status(500).json({ msg: "Failed to load filters ❌" });
+    }
+};
+
+export const getSearchHistory = async (req, res) => {
+    try {
+        const history = await SearchHistory.find({
+            userId: req.userId
+        })
+            .sort({ createdAt: -1 })
+            .limit(30);
+
+        res.json(history);
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Failed to fetch history" });
+    }
+};
+
+export const deleteSearchHistory = async (req, res) => {
+    try {
+        await SearchHistory.deleteOne({
+            _id: req.params.id,
+            userId: req.userId
+        });
+
+        res.json({ msg: "Deleted successfully" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Delete failed" });
+    }
+};
+
+export const clearSearchHistory = async (req, res) => {
+    try {
+        await SearchHistory.deleteMany({
+            userId: req.userId
+        });
+
+        res.json({ msg: "History cleared" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Clear failed" });
     }
 };
