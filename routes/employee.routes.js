@@ -9,7 +9,9 @@ const {
     getMyEmployees,
     updateEmployee,
     deleteEmployee,
-    getAllEmployees
+    getAllEmployees,
+    updateEmployeebyAll,
+    deleteEmployeebyAll
 } = require("../controllers/employee.controller");
 
 const router = express.Router();
@@ -35,5 +37,7 @@ router.get("/my-employees", verifyAdmin, getMyEmployees);
 router.put("/update-employee/:id", verifyAdmin, updateEmployee);
 router.delete("/delete-employee/:id", verifyAdmin, deleteEmployee);
 router.get("/all", verifyAdmin, getAllEmployees);
+router.put("/update-by-all/:id", verifyAdmin, updateEmployeebyAll);
+router.delete("/delete-by-all/:id", verifyAdmin, deleteEmployeebyAll);
 
 module.exports = router;

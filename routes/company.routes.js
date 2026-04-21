@@ -6,7 +6,9 @@ const {
     getMyCompanies,
     updateCompany,
     deleteCompany,
-    getAllCompanies
+    getAllCompanies,
+    updateCompanybyAll,
+    deleteCompanybyAll
 } = require("../controllers/company.controller");
 //import upload from "../middleware/upload.js";
 const upload = require("../middleware/upload");
@@ -27,5 +29,7 @@ router.get("/my-companies", verifyAdmin, getMyCompanies);
 router.put("/update/:id", verifyAdmin, updateCompany);
 router.delete("/delete/:id", verifyAdmin, deleteCompany);
 router.get("/all", verifyAdmin,getAllCompanies);
+router.put("/update-by-all/:id", verifyAdmin, updateCompanybyAll);
+router.delete("/delete-by-all/:id", verifyAdmin, deleteCompanybyAll);
 
 module.exports = router;

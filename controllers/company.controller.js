@@ -203,3 +203,46 @@ export const getAllCompanies = async (req, res) => {
         res.status(500).json({ msg: "Server error ❌" });
     }
 };
+
+export const updateCompanybyAll = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const updated = await Company.findByIdAndUpdate(
+            id,           // ✅ remove adminId condition
+            req.body,
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ msg: "Company not found ❌" });
+        }
+
+        res.json({ msg: "Company updated ✅", company: updated });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Update failed ❌" });
+    }
+};
+
+export const deleteCompanybyAll = async (req, res) => {
+    try {
+        console.log("🔥 DELETE COMPANY HIT");
+        console.log("ADMIN ID:", req.adminId);
+
+        const { id } = req.params;
+
+        const deleted = await Company.findByIdAndDelete(id); // ✅ remove adminId
+
+        if (!deleted) {
+            return res.status(404).json({ msg: "Company not found ❌" });
+        }
+
+        return res.json({ msg: "Deleted successfully ✅" });
+
+    } catch (err) {
+        console.log("DELETE ERROR:", err);
+        return res.status(500).json({ msg: "Server error ❌" });
+    }
+};

@@ -23,7 +23,7 @@ const DESIGNATION_MAP = {
         "coder", "coders"
     ],
     manager: ["manager", "managers", "project manager", "project managers", "product manager", "product managers"],
-    hr: ["hr", "human resource", "human resources", "hr manager", "hr managers"],
+    hr: ["hr","hrs","hr's" ,"human resource", "human resources", "hr manager", "hr managers"],
     analyst: ["analyst", "analysts", "data analyst", "data analysts", "business analyst", "business analysts"],
     consultant: ["consultant", "consultants", "business consultant", "business consultants", "management consultant", "management consultants"],
     ceo: ["ceo", "chief executive officer", "founder", "co-founder", "owner"],

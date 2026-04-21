@@ -239,3 +239,45 @@ export const getAllEmployees = async (req, res) => {
         res.status(500).json({ msg: "Server error ❌" });
     }
 };
+
+export const updateEmployeebyAll = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const updated = await Employee.findByIdAndUpdate(
+            id,
+            req.body,
+            { new: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ msg: "Employee not found ❌" });
+        }
+
+        res.json({
+            msg: "Employee updated successfully ✅",
+            employee: updated
+        });
+
+    } catch (err) {
+        res.status(500).json({ msg: "Update failed ❌" });
+    }
+};
+
+export const deleteEmployeebyAll = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const deleted = await Employee.findByIdAndDelete(id);
+
+        if (!deleted) {
+            return res.status(404).json({ msg: "Employee not found ❌" });
+        }
+
+        res.json({ msg: "Deleted successfully ✅" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ msg: "Server error ❌" });
+    }
+};
