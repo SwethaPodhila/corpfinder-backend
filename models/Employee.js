@@ -1,40 +1,61 @@
 import mongoose from "mongoose";
 
 const employeeSchema = new mongoose.Schema({
-    name: {
+    first_name: {
         type: String,
         required: true,
         trim: true
     },
+    last_name: {
+        type: String,
+        default: null,
+        trim: true
+    },
     designation: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
-    company: {
+    company_name: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     city: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     state: {
         type: String,
-        required: true
+        required: false,
+        trim: true
     },
     country: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
-    email: {
+    personal_email: {
         type: String,
-        default: null
+        default: null,
+        trim: true
+    },
+    business_email: {
+        type: String,
+        default: null,
+        trim: true
     },
     phone: {
         type: String,
+        default: null,
+        trim: true
+    },
+    linkedin_id: {
+        type: String,
         default: null
     },
-    industry: {
+    linkedin_url: {
         type: String,
         default: null
     },

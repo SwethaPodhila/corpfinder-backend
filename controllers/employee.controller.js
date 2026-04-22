@@ -7,26 +7,40 @@ import Employee from "../models/Employee.js";
 export const addEmployee = async (req, res) => {
     try {
         const {
-            name,
+            first_name,
+            last_name,
             designation,
-            company,
+            company_name,
             city,
             state,
             country,
-            email,
+            personal_email,
+            business_email,
             phone,
-            industry,
+            linkedin_id,
+            linkedin_url,
             description
         } = req.body;
 
-        if (!name || !designation || !company || !city || !state || !country) {
+        // 🔴 REQUIRED VALIDATION
+        if (
+            !first_name ||
+            !designation ||
+            !company_name ||
+            !city ||
+            !state ||
+            !country
+        ) {
             return res.status(400).json({ msg: "Required fields missing ❗" });
         }
 
+        // 🔍 DUPLICATE CHECK
         const exists = await Employee.findOne({
-            name,
-            email,
-            company,
+            first_name,
+            company_name,
+            designation,
+            city,
+            state,
             adminId: req.adminId
         });
 
@@ -35,15 +49,18 @@ export const addEmployee = async (req, res) => {
         }
 
         const employee = await Employee.create({
-            name,
+            first_name,
+            last_name,
             designation,
-            company,
+            company_name,
             city,
             state,
             country,
-            email,
+            personal_email,
+            business_email,
             phone,
-            industry,
+            linkedin_id,
+            linkedin_url,
             description: description || null,
             adminId: req.adminId
         });
@@ -73,7 +90,7 @@ export const uploadEmployees = async (req, res) => {
             return res.status(400).json({ msg: "Empty file ❗" });
         }
 
-        // normalize keys
+        // 🔥 normalize keys
         const normalizedData = data.map(row => {
             const newRow = {};
             Object.keys(row).forEach(key => {
@@ -88,29 +105,35 @@ export const uploadEmployees = async (req, res) => {
 
         const clean = (val) => val?.toString().trim();
 
+        // 🔥 NEW: track duplicates inside file
+        const seen = new Set();
+
         for (let i = 0; i < normalizedData.length; i++) {
             const item = normalizedData[i];
 
-            const name = clean(item.name);
+            const first_name = clean(item.first_name);
+            const last_name = clean(item.last_name);
             const designation = clean(item.designation);
-            const company = clean(item.company);
+            const company_name = clean(item.company_name);
             const city = clean(item.city);
             const state = clean(item.state);
             const country = clean(item.country);
-            const email = clean(item.email);
+            const personal_email = clean(item.personal_email);
+            const business_email = clean(item.business_email);
             const phone = clean(item.phone);
-            const industry = clean(item.industry);
+            const linkedin_id = clean(item.linkedin_id);
+            const linkedin_url = clean(item.linkedin_url);
             const description = clean(item.description);
 
-            const identifier = `${name || "Unknown"} (${email || "No Email"})`;
+            const identifier = `${first_name || "Unknown"} (${personal_email || "No Email"})`;
 
+            // 🔴 required validation
             const missingFields = [];
 
-            if (!name) missingFields.push("name");
+            if (!first_name) missingFields.push("first_name");
             if (!designation) missingFields.push("designation");
-            if (!company) missingFields.push("company");
+            if (!company_name) missingFields.push("company_name");
             if (!city) missingFields.push("city");
-            if (!state) missingFields.push("state");
             if (!country) missingFields.push("country");
 
             if (missingFields.length > 0) {
@@ -118,30 +141,45 @@ export const uploadEmployees = async (req, res) => {
                 continue;
             }
 
+            // 🔥 UNIQUE KEY (file level)
+            const uniqueKey = `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
+
+            // ❌ duplicate inside file
+            if (seen.has(uniqueKey)) {
+                duplicates.push(`${identifier}: Duplicate in file`);
+                continue;
+            }
+
+            seen.add(uniqueKey);
+
+            // ❌ duplicate in DB
             const exists = await Employee.findOne({
-                email,
-                company,
+                first_name,
+                company_name,
                 designation,
-                state,
                 city,
+                state,
                 adminId: req.adminId
             });
 
             if (exists) {
-                duplicates.push(`${identifier}: Already exists`);
+                duplicates.push(`${identifier}: Already exists in DB`);
                 continue;
             }
 
             validData.push({
-                name,
+                first_name,
+                last_name,
                 designation,
-                company,
+                company_name,
                 city,
                 state,
                 country,
-                email,
+                personal_email,
+                business_email,
                 phone,
-                industry,
+                linkedin_id,
+                linkedin_url,
                 description: description || null,
                 adminId: req.adminId
             });

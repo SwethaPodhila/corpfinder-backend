@@ -6,35 +6,70 @@ import Company from "../models/Company.js";
 ========================= */
 export const addCompany = async (req, res) => {
     try {
-        const { name, country, state, city, description } = req.body;
+        const {
+            company_name,
+            company_type,
+            company_industry,
+            company_address,
+            company_website,
+            company_city,
+            company_state,
+            company_country,
+            company_phone,
+            company_email,
+            company_linkedin_url,
+            company_founded,
+            company_description
+        } = req.body;
 
-        if (!name || !country || !state || !city) {
-            return res.status(400).json({ msg: "Required fields missing ❗" });
+        // ✅ Required check
+        if (!company_name || !company_type || !company_industry) {
+            return res.status(400).json({
+                msg: "Required fields missing ❗"
+            });
         }
 
-        const exists = await Company.findOne({ name, country, state, city });
+        // ✅ Duplicate check
+        const exists = await Company.findOne({
+            company_name,
+            company_city,
+            company_state,
+            company_country
+        });
 
         if (exists) {
-            return res.status(400).json({ msg: "Company already exists ❗" });
+            return res.status(400).json({
+                msg: "Company already exists ❗"
+            });
         }
 
         const company = await Company.create({
-            name,
-            country,
-            state,
-            city,
-            description: description || null,
-            adminId: req.adminId   // 🔥 IMPORTANT
+            company_name,
+            company_type,
+            company_industry,
+            company_address,
+            company_website,
+            company_city,
+            company_state,
+            company_country,
+            company_phone,
+            company_email,
+            company_linkedin_url,
+            company_founded,
+            company_description,
+            adminId: req.adminId
         });
 
-        res.json({ msg: "Company added ✅", company });
+        res.json({
+            msg: "Company added ✅",
+            company
+        });
 
     } catch (err) {
         console.log(err);
         res.status(500).json({ msg: "Server error ❌" });
     }
 };
-
 
 /* =========================
    🔥 BULK UPLOAD
@@ -53,6 +88,7 @@ export const uploadCompanies = async (req, res) => {
             return res.status(400).json({ msg: "Empty file ❗" });
         }
 
+        // normalize keys
         const normalizedData = data.map(row => {
             const newRow = {};
             Object.keys(row).forEach(key => {
@@ -67,51 +103,80 @@ export const uploadCompanies = async (req, res) => {
 
         const clean = (val) => val?.toString().trim();
 
+        // 🔥 IMPORTANT: track duplicates inside file
+        const seen = new Set();
+
         for (let i = 0; i < normalizedData.length; i++) {
             const item = normalizedData[i];
 
-            const name = clean(item.name);
-            const country = clean(item.country);
-            const state = clean(item.state);
-            const city = clean(item.city);
-            const description = clean(item.description);
+            const company_name = clean(item.company_name);
+            const company_type = clean(item.company_type);
+            const company_industry = clean(item.company_industry);
+            const company_address = clean(item.company_address);
+            const company_website = clean(item.company_website);
+            const company_city = clean(item.company_city);
+            const company_state = clean(item.company_state);
+            const company_country = clean(item.company_country);
+            const company_phone = clean(item.company_phone);
+            const company_email = clean(item.company_email);
+            const company_linkedin_url = clean(item.company_linkedin_url);
+            const company_founded = clean(item.company_founded);
+            const company_description = clean(item.company_description);
 
-            const identifier = `${name || "Unknown"} (${city || "No City"})`;
+            const identifier = `${company_name || "Unknown"} (${company_city || "No City"})`;
 
+            // 🔴 required validation
             const missingFields = [];
 
-            if (!name) missingFields.push("name");
-            if (!country) missingFields.push("country");
-            if (!state) missingFields.push("state");
-            if (!city) missingFields.push("city");
+            if (!company_name) missingFields.push("company_name");
+            if (!company_type) missingFields.push("company_type");
+            if (!company_industry) missingFields.push("company_industry");
 
             if (missingFields.length > 0) {
                 errors.push(`${identifier}: Missing → ${missingFields.join(", ")}`);
                 continue;
             }
 
-            const companyData = {
-                name,
-                country,
-                state,
-                city,
-                description: description || null,
-                adminId: req.adminId
-            };
+            // 🔥 UNIQUE KEY (FILE LEVEL)
+            const uniqueKey = `${company_name}-${company_city}-${company_state}-${company_country}`.toLowerCase();
 
-            const exists = await Company.findOne({
-                name,
-                country,
-                state,
-                city
-            });
-
-            if (exists) {
-                duplicates.push(`${identifier}: Already exists`);
+            // ❌ duplicate inside file
+            if (seen.has(uniqueKey)) {
+                duplicates.push(`${identifier}: Duplicate in file`);
                 continue;
             }
 
-            validData.push(companyData);
+            seen.add(uniqueKey);
+
+            // ❌ duplicate in DB
+            const exists = await Company.findOne({
+                company_name,
+                company_city,
+                company_state,
+                company_country
+            });
+
+            if (exists) {
+                duplicates.push(`${identifier}: Already exists in DB`);
+                continue;
+            }
+
+            validData.push({
+                company_name,
+                company_type,
+                company_industry,
+                company_address,
+                company_website,
+                company_city,
+                company_state,
+                company_country,
+                company_phone,
+                company_email,
+                company_linkedin_url,
+                company_founded,
+                company_description,
+                adminId: req.adminId
+            });
         }
 
         if (validData.length > 0) {
