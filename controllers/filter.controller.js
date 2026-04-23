@@ -23,7 +23,7 @@ const DESIGNATION_MAP = {
         "coder", "coders"
     ],
     manager: ["manager", "managers", "project manager", "project managers", "product manager", "product managers"],
-    hr: ["hr","hrs","hr's" ,"human resource", "human resources", "hr manager", "hr managers"],
+    hr: ["hr", "hrs", "hr's", "human resource", "human resources", "hr manager", "hr managers"],
     analyst: ["analyst", "analysts", "data analyst", "data analysts", "business analyst", "business analysts"],
     consultant: ["consultant", "consultants", "business consultant", "business consultants", "management consultant", "management consultants"],
     ceo: ["ceo", "chief executive officer", "founder", "co-founder", "owner"],
@@ -101,60 +101,109 @@ export const searchData = async (req, res) => {
             city
         } = req.query;
 
+       // console.log("🔥 Incoming Query:", req.query);
+
         /* =========================
-           STEP 1: CLEAN QUERY
+           STOP WORDS
         ========================= */
-        const tokens = tokenize(query);
+        const STOP_WORDS = new Set([
+            "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need",
+            "find", "city", "state", "country", "industry", "designation", "and",
+            "is", "are", "of", "on", "with", "me", "show", "all", "any", "some"
+        ]);
+
+        /* =========================
+           TOKENIZE (CLEAN INPUT)
+        ========================= */
+        const tokens = query
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
+            .filter(w => w && !STOP_WORDS.has(w));
+
+        //console.log("🧠 Tokens:", tokens);
 
         if (!query || tokens.length === 0) {
             return res.json({
-                msg: "Please enter a valid search keyword 🔍",
-                results: []
+                msg: "Please enter valid keyword",
+                data: []
             });
         }
 
         /* =========================
-           STEP 2: EXPAND KEYWORDS
+           PHRASE MATCH (IMPORTANT)
         ========================= */
-        let expanded = [];
-        tokens.forEach(t => expanded.push(...expandWord(t)));
-        expanded = [...new Set(expanded)];
+        const phraseMatch = query.match(/"([^"]+)"/);
+        const phrase = phraseMatch ? phraseMatch[1] : null;
 
-        const smartQuery = buildSmartQuery(tokens);
-
-        let employeeFilter = { ...smartQuery };
-        let companyFilter = { ...smartQuery };
+        //console.log("📌 Phrase:", phrase);
 
         /* =========================
-           STEP 3: DIRECT FILTERS
+           EMPLOYEE FILTER (STRICT AND LOGIC)
+        ========================= */
+        let employeeFilter = {
+            $and: tokens.map(t => ({
+                $or: [
+                    { first_name: new RegExp(t, "i") },
+                    { last_name: new RegExp(t, "i") },
+                    { designation: new RegExp(t, "i") },
+                    { company_name: new RegExp(t, "i") },
+                    { city: new RegExp(t, "i") },
+                    { state: new RegExp(t, "i") },
+                    { country: new RegExp(t, "i") }
+                ]
+            }))
+        };
+
+        /* =========================
+           COMPANY FILTER
+        ========================= */
+        let companyFilter = {
+            $and: tokens.map(t => ({
+                $or: [
+                    { company_name: new RegExp(t, "i") },
+                    { company_industry: new RegExp(t, "i") },
+                    { company_city: new RegExp(t, "i") },
+                    { company_state: new RegExp(t, "i") },
+                    { company_country: new RegExp(t, "i") }
+                ]
+            }))
+        };
+
+        /* =========================
+           FILTER EXTENSIONS (UI FILTERS)
         ========================= */
         if (designation) {
-            employeeFilter.designation = new RegExp(designation, "i");
+            employeeFilter.$and.push({
+                designation: new RegExp(designation, "i")
+            });
         }
 
         if (industry) {
-            employeeFilter.industry = new RegExp(industry, "i");
+            companyFilter.$and.push({
+                company_industry: new RegExp(industry, "i")
+            });
         }
 
         if (country) {
-            employeeFilter.country = new RegExp(country, "i");
-            companyFilter.country = new RegExp(country, "i");
+            employeeFilter.$and.push({ country: new RegExp(country, "i") });
+            companyFilter.$and.push({ company_country: new RegExp(country, "i") });
         }
 
         if (state) {
-            employeeFilter.state = new RegExp(state, "i");
-            companyFilter.state = new RegExp(state, "i");
+            employeeFilter.$and.push({ state: new RegExp(state, "i") });
+            companyFilter.$and.push({ company_state: new RegExp(state, "i") });
         }
 
         if (city) {
-            employeeFilter.city = new RegExp(city, "i");
-            companyFilter.city = new RegExp(city, "i");
+            employeeFilter.$and.push({ city: new RegExp(city, "i") });
+            companyFilter.$and.push({ company_city: new RegExp(city, "i") });
         }
 
         /* =========================
-           STEP 4: FETCH DATA
+           FETCH DATA
         ========================= */
-        let results = [];
+        let results;
 
         if (type === "companies") {
             results = await Company.find(companyFilter).limit(100);
@@ -162,69 +211,38 @@ export const searchData = async (req, res) => {
             results = await Employee.find(employeeFilter).limit(100);
         }
 
+        console.log("📦 RESULTS:", results.length);
+
         /* =========================
-           STEP 5: RANKING
+           SMART RANKING (NO JSON STRINGIFY)
         ========================= */
-        results = results.sort((a, b) => {
-            const aText = JSON.stringify(a).toLowerCase();
-            const bText = JSON.stringify(b).toLowerCase();
+        const scoreText = (obj) => {
+            const text = [
+                obj.first_name,
+                obj.last_name,
+                obj.designation,
+                obj.company_name,
+                obj.company_industry,
+                obj.city,
+                obj.state,
+                obj.country
+            ].join(" ").toLowerCase();
 
-            let aScore = 0;
-            let bScore = 0;
+            return tokens.reduce((acc, t) => acc + (text.includes(t) ? 1 : 0), 0);
+        };
 
-            expanded.forEach(k => {
-                if (aText.includes(k)) aScore++;
-                if (bText.includes(k)) bScore++;
-            });
+        results = results.sort((a, b) => scoreText(b) - scoreText(a));
 
-            return bScore - aScore;
+        /* =========================
+           RESPONSE
+        ========================= */
+        return res.json({
+            success: true,
+            data: results
         });
 
-        /* =========================
-           STEP 6: SAVE HISTORY (FIXED)
-           - only when user exists
-           - only when results > 0
-           - no duplicates
-        ========================= */
-        if (req.userId && results.length > 0) {
-
-            const existing = await SearchHistory.findOne({
-                userId: req.userId,
-                query: query.trim()
-            });
-
-            if (!existing) {
-                await SearchHistory.create({
-                    userId: req.userId,
-                    query: query.trim(),
-                    resultCount: results.length
-                });
-            }
-
-            const count = await SearchHistory.countDocuments({
-                userId: req.userId
-            });
-
-            if (count > 30) {
-                const oldest = await SearchHistory.find({ userId: req.userId })
-                    .sort({ createdAt: 1 })
-                    .limit(count - 30);
-
-                const idsToDelete = oldest.map(item => item._id);
-
-                await SearchHistory.deleteMany({
-                    _id: { $in: idsToDelete }
-                });
-            }
-        }
-
-        /* =========================
-           FINAL RESPONSE
-        ========================= */
-        res.json(results);
-
     } catch (err) {
-        console.log(err);
+        console.log("❌ ERROR:", err);
         res.status(500).json({ msg: "Search failed ❌" });
     }
 };
