@@ -101,7 +101,7 @@ export const searchData = async (req, res) => {
             city
         } = req.query;
 
-       // console.log("🔥 Incoming Query:", req.query);
+        // console.log("🔥 Incoming Query:", req.query);
 
         /* =========================
            STOP WORDS
@@ -232,6 +232,41 @@ export const searchData = async (req, res) => {
         };
 
         results = results.sort((a, b) => scoreText(b) - scoreText(a));
+
+        /* =========================
+    SAVE SEARCH HISTORY
+ ========================= */
+        if (req.userId && results.length > 0) {
+
+            const existing = await SearchHistory.findOne({
+                userId: req.userId,
+                query: query.trim()
+            });
+
+            if (!existing) {
+                await SearchHistory.create({
+                    userId: req.userId,
+                    query: query.trim(),
+                    resultCount: results.length
+                });
+            }
+
+            const count = await SearchHistory.countDocuments({
+                userId: req.userId
+            });
+
+            if (count > 30) {
+                const oldest = await SearchHistory.find({ userId: req.userId })
+                    .sort({ createdAt: 1 })
+                    .limit(count - 30);
+
+                const idsToDelete = oldest.map(item => item._id);
+
+                await SearchHistory.deleteMany({
+                    _id: { $in: idsToDelete }
+                });
+            }
+        }
 
         /* =========================
            RESPONSE
