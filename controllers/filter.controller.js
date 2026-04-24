@@ -96,9 +96,11 @@ export const searchData = async (req, res) => {
 
         /* ================= STOP WORDS ================= */
         const STOP_WORDS = new Set([
-            "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need", "find", "city", "state", "country", "industry", "designation", "work", "with",
-            "iam", "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
-            "show", "me", "all", "any", "some", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
+            "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
+            "need", "find", "city", "state", "country", "industry", "designation",
+            "work", "with", "iam", "is", "are", "of", "on", "and", "job", "role",
+            "employees", "company", "companies", "people", "search", "find",
+            "that", "this", "list", "show", "me", "all", "any", "some"
         ]);
 
         /* ================= TOKENIZE ================= */
@@ -111,13 +113,10 @@ export const searchData = async (req, res) => {
         console.log("🧠 Clean Tokens:", tokens);
 
         if (!tokens.length) {
-            return res.json({
-                success: true,
-                data: []
-            });
+            return res.json({ success: true, data: [] });
         }
 
-        /* ================= FETCH ALL EMPLOYEES ================= */
+        /* ================= FETCH EMPLOYEES ================= */
         const employees = await Employee.find({});
 
         console.log("📦 TOTAL EMPLOYEES:", employees.length);
@@ -134,9 +133,7 @@ export const searchData = async (req, res) => {
                 emp.city,
                 emp.state,
                 emp.country
-            ]
-                .join(" ")
-                .toLowerCase();
+            ].join(" ").toLowerCase();
 
             let score = 0;
 
@@ -152,16 +149,27 @@ export const searchData = async (req, res) => {
             };
         });
 
-        /* ================= FILTER + RANK =================
-           IMPORTANT FIX:
-           - allow even 1 match (NOT 2)
-           - sort by best match
-        =============================================== */
+        /* ================= FILTER + SORT ================= */
         const filtered = scored
             .filter(emp => emp.score >= 1)
             .sort((a, b) => b.score - a.score);
 
         console.log("🎯 FINAL RESULTS:", filtered.length);
+
+        /* ================= SAVE SEARCH HISTORY ================= */
+        if (req.userId) {
+            try {
+                await SearchHistory.create({
+                    userId: req.userId,
+                    query: query,
+                    resultCount: filtered.length
+                });
+
+                console.log("📝 Search history saved");
+            } catch (err) {
+                console.log("⚠️ History save failed:", err.message);
+            }
+        }
 
         return res.json({
             success: true,
