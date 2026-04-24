@@ -1,5 +1,4 @@
-import Employee from "../models/Employee.js";
-import Company from "../models/Company.js";
+import Employee from "../models/EmployeeCompany.js";
 import SearchHistory from "../models/History.js";
 
 /* =========================
@@ -91,194 +90,90 @@ const buildSmartQuery = (tokens) => {
 ========================= */
 export const searchData = async (req, res) => {
     try {
-        const {
-            query = "",
-            type = "people",
-            industry,
-            designation,
-            country,
-            state,
-            city
-        } = req.query;
+        const { query = "" } = req.query;
 
-        // console.log("🔥 Incoming Query:", req.query);
+        console.log("🔥 Incoming Query:", query);
 
-        /* =========================
-           STOP WORDS
-        ========================= */
+        /* ================= STOP WORDS ================= */
         const STOP_WORDS = new Set([
-            "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need",
-            "find", "city", "state", "country", "industry", "designation", "and",
-            "is", "are", "of", "on", "with", "me", "show", "all", "any", "some"
+            "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an", "need", "find", "city", "state", "country", "industry", "designation", "work", "with",
+            "iam", "is", "are", "of", "on", "and", "job", "role", "employees", "company", "companies", "people", "search", "find", "with", "that", "this", "list",
+            "show", "me", "all", "any", "some", "my", "your", "his", "her", "its", "our", "their", "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
         ]);
 
-        /* =========================
-           TOKENIZE (CLEAN INPUT)
-        ========================= */
+        /* ================= TOKENIZE ================= */
         const tokens = query
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, " ")
             .split(/\s+/)
             .filter(w => w && !STOP_WORDS.has(w));
 
-        //console.log("🧠 Tokens:", tokens);
+        console.log("🧠 Clean Tokens:", tokens);
 
-        if (!query || tokens.length === 0) {
+        if (!tokens.length) {
             return res.json({
-                msg: "Please enter valid keyword",
+                success: true,
                 data: []
             });
         }
 
-        /* =========================
-           PHRASE MATCH (IMPORTANT)
-        ========================= */
-        const phraseMatch = query.match(/"([^"]+)"/);
-        const phrase = phraseMatch ? phraseMatch[1] : null;
+        /* ================= FETCH ALL EMPLOYEES ================= */
+        const employees = await Employee.find({});
 
-        //console.log("📌 Phrase:", phrase);
+        console.log("📦 TOTAL EMPLOYEES:", employees.length);
 
-        /* =========================
-           EMPLOYEE FILTER (STRICT AND LOGIC)
-        ========================= */
-        let employeeFilter = {
-            $and: tokens.map(t => ({
-                $or: [
-                    { first_name: new RegExp(t, "i") },
-                    { last_name: new RegExp(t, "i") },
-                    { designation: new RegExp(t, "i") },
-                    { company_name: new RegExp(t, "i") },
-                    { city: new RegExp(t, "i") },
-                    { state: new RegExp(t, "i") },
-                    { country: new RegExp(t, "i") }
-                ]
-            }))
-        };
+        /* ================= SCORING ================= */
+        const scored = employees.map(emp => {
 
-        /* =========================
-           COMPANY FILTER
-        ========================= */
-        let companyFilter = {
-            $and: tokens.map(t => ({
-                $or: [
-                    { company_name: new RegExp(t, "i") },
-                    { company_industry: new RegExp(t, "i") },
-                    { company_city: new RegExp(t, "i") },
-                    { company_state: new RegExp(t, "i") },
-                    { company_country: new RegExp(t, "i") }
-                ]
-            }))
-        };
-
-        /* =========================
-           FILTER EXTENSIONS (UI FILTERS)
-        ========================= */
-        if (designation) {
-            employeeFilter.$and.push({
-                designation: new RegExp(designation, "i")
-            });
-        }
-
-        if (industry) {
-            companyFilter.$and.push({
-                company_industry: new RegExp(industry, "i")
-            });
-        }
-
-        if (country) {
-            employeeFilter.$and.push({ country: new RegExp(country, "i") });
-            companyFilter.$and.push({ company_country: new RegExp(country, "i") });
-        }
-
-        if (state) {
-            employeeFilter.$and.push({ state: new RegExp(state, "i") });
-            companyFilter.$and.push({ company_state: new RegExp(state, "i") });
-        }
-
-        if (city) {
-            employeeFilter.$and.push({ city: new RegExp(city, "i") });
-            companyFilter.$and.push({ company_city: new RegExp(city, "i") });
-        }
-
-        /* =========================
-           FETCH DATA
-        ========================= */
-        let results;
-
-        if (type === "companies") {
-            results = await Company.find(companyFilter).limit(100);
-        } else {
-            results = await Employee.find(employeeFilter).limit(100);
-        }
-
-        console.log("📦 RESULTS:", results.length);
-
-        /* =========================
-           SMART RANKING (NO JSON STRINGIFY)
-        ========================= */
-        const scoreText = (obj) => {
             const text = [
-                obj.first_name,
-                obj.last_name,
-                obj.designation,
-                obj.company_name,
-                obj.company_industry,
-                obj.city,
-                obj.state,
-                obj.country
-            ].join(" ").toLowerCase();
+                emp.first_name,
+                emp.last_name,
+                emp.designation,
+                emp.company_name,
+                emp.company_industry,
+                emp.city,
+                emp.state,
+                emp.country
+            ]
+                .join(" ")
+                .toLowerCase();
 
-            return tokens.reduce((acc, t) => acc + (text.includes(t) ? 1 : 0), 0);
-        };
+            let score = 0;
 
-        results = results.sort((a, b) => scoreText(b) - scoreText(a));
-
-        /* =========================
-    SAVE SEARCH HISTORY
- ========================= */
-        if (req.userId && results.length > 0) {
-
-            const existing = await SearchHistory.findOne({
-                userId: req.userId,
-                query: query.trim()
+            tokens.forEach(t => {
+                if (text.includes(t)) {
+                    score++;
+                }
             });
 
-            if (!existing) {
-                await SearchHistory.create({
-                    userId: req.userId,
-                    query: query.trim(),
-                    resultCount: results.length
-                });
-            }
+            return {
+                ...emp.toObject(),
+                score
+            };
+        });
 
-            const count = await SearchHistory.countDocuments({
-                userId: req.userId
-            });
+        /* ================= FILTER + RANK =================
+           IMPORTANT FIX:
+           - allow even 1 match (NOT 2)
+           - sort by best match
+        =============================================== */
+        const filtered = scored
+            .filter(emp => emp.score >= 1)
+            .sort((a, b) => b.score - a.score);
 
-            if (count > 30) {
-                const oldest = await SearchHistory.find({ userId: req.userId })
-                    .sort({ createdAt: 1 })
-                    .limit(count - 30);
+        console.log("🎯 FINAL RESULTS:", filtered.length);
 
-                const idsToDelete = oldest.map(item => item._id);
-
-                await SearchHistory.deleteMany({
-                    _id: { $in: idsToDelete }
-                });
-            }
-        }
-
-        /* =========================
-           RESPONSE
-        ========================= */
         return res.json({
             success: true,
-            data: results
+            data: filtered
         });
 
     } catch (err) {
         console.log("❌ ERROR:", err);
-        res.status(500).json({ msg: "Search failed ❌" });
+        res.status(500).json({
+            success: false,
+            msg: "Search failed"
+        });
     }
 };
 
