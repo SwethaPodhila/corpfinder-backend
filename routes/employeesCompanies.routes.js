@@ -8,11 +8,12 @@ const {
     getEmployees,
     getEmployeeById,
     updateEmployee,
-    deleteEmployee
+    deleteEmployee,
+    getEmployeeByIdUser
 } = require("../controllers/employeecompanies.controller");
 
 // ✅ middleware import
-const { verifyAdmin } = require("../middleware/auth");
+const { verifyAdmin,verifyUser } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -28,5 +29,6 @@ router.get("/allEmployees", verifyAdmin, getEmployees);
 router.get("/:id", verifyAdmin, getEmployeeById);
 router.put("/update/:id", verifyAdmin, updateEmployee);
 router.delete("/delete/:id", verifyAdmin, deleteEmployee);
+router.get("/user/:id", verifyUser, getEmployeeByIdUser);
 
 module.exports = router;
