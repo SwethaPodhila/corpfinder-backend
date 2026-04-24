@@ -159,13 +159,25 @@ export const searchData = async (req, res) => {
         /* ================= SAVE SEARCH HISTORY ================= */
         if (req.userId) {
             try {
-                await SearchHistory.create({
-                    userId: req.userId,
-                    query: query,
-                    resultCount: filtered.length
-                });
+                const normalizedQuery = query.trim().toLowerCase();
 
-                console.log("📝 Search history saved");
+                // 🔍 check last search by same user
+                const lastSearch = await SearchHistory.findOne({ userId: req.userId })
+                    .sort({ createdAt: -1 });
+
+                // 🚫 if same query as last time → don't save
+                if (lastSearch && lastSearch.query.toLowerCase() === normalizedQuery) {
+                    console.log("⛔ Duplicate search ignored");
+                } else {
+                    await SearchHistory.create({
+                        userId: req.userId,
+                        query: normalizedQuery,
+                        resultCount: filtered.length
+                    });
+
+                    console.log("📝 Search history saved");
+                }
+
             } catch (err) {
                 console.log("⚠️ History save failed:", err.message);
             }
