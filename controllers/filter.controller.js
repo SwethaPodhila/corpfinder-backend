@@ -102,7 +102,6 @@ export const searchData = async (req, res) => {
         console.log("🔥 Incoming Query:", query);
         console.log("🎯 Filters:", { country, state, city, designation, industry });
 
-        /* ================= STOP WORDS ================= */
         const STOP_WORDS = new Set([
             "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
             "need", "find", "city", "state", "country", "industry", "designation",
@@ -111,42 +110,22 @@ export const searchData = async (req, res) => {
             "that", "this", "list", "show", "me", "all", "any", "some"
         ]);
 
-        /* ================= TOKENIZE ================= */
         const tokens = query
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, " ")
             .split(/\s+/)
             .filter(w => w && !STOP_WORDS.has(w));
 
-        console.log("🧠 Clean Tokens:", tokens);
-
-        /* ================= BUILD FILTER QUERY ================= */
-
         const escapeRegex = (text) =>
             text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const filterQuery = {};
 
-        if (country) filterQuery.country = new RegExp(escapeRegex(country), "i");
-        if (state) filterQuery.state = new RegExp(escapeRegex(state), "i");
-        if (city) filterQuery.city = new RegExp(escapeRegex(city), "i");
-        if (designation) filterQuery.designation = new RegExp(escapeRegex(designation), "i");
-        if (industry) filterQuery.company_industry = new RegExp(escapeRegex(industry), "i");
+        /* ================= STEP 1: GET ALL DATA ================= */
+        const employees = await Employee.find({});
 
-        /* ================= FETCH EMPLOYEES (WITH FILTERS) ================= */
-        const employees = await Employee.find(filterQuery);
+        console.log("📦 TOTAL:", employees.length);
 
-        console.log("📦 FILTERED EMPLOYEES:", employees.length);
-
-        // 👉 If NO query → return filtered data directly
-        if (!tokens.length) {
-            return res.json({
-                success: true,
-                data: employees
-            });
-        }
-
-        /* ================= SCORING ================= */
-        const scored = employees.map(emp => {
+        /* ================= STEP 2: AND FILTER LOGIC ================= */
+        const finalResults = employees.filter(emp => {
 
             const text = [
                 emp.first_name,
@@ -159,51 +138,25 @@ export const searchData = async (req, res) => {
                 emp.country
             ].join(" ").toLowerCase();
 
-            let score = 0;
+            /* ---------------- QUERY CONDITION (AND) ---------------- */
+            const queryMatch =
+                tokens.length === 0 ||
+                tokens.every(t => text.includes(t));  // 🔥 AND logic
 
-            tokens.forEach(t => {
-                if (text.includes(t)) {
-                    score++;
-                }
-            });
+            /* ---------------- FILTER CONDITION (AND) ---------------- */
+            const filterMatch =
+                (!country || new RegExp(escapeRegex(country), "i").test(emp.country)) &&
+                (!state || new RegExp(escapeRegex(state), "i").test(emp.state)) &&
+                (!city || new RegExp(escapeRegex(city), "i").test(emp.city)) &&
+                (!designation || new RegExp(escapeRegex(designation), "i").test(emp.designation)) &&
+                (!industry || new RegExp(escapeRegex(industry), "i").test(emp.company_industry));
 
-            return {
-                ...emp.toObject(),
-                score
-            };
+            /* ---------------- FINAL AND ---------------- */
+            return queryMatch && filterMatch;   // 🔥 MAIN FIX
+
         });
 
-        /* ================= FILTER + SORT ================= */
-        const finalResults = scored
-            .filter(emp => emp.score >= 1)
-            .sort((a, b) => b.score - a.score);
-
         console.log("🎯 FINAL RESULTS:", finalResults.length);
-
-        /* ================= SAVE SEARCH HISTORY ================= */
-        if (req.userId) {
-            try {
-                const normalizedQuery = query.trim().toLowerCase();
-
-                const lastSearch = await SearchHistory.findOne({ userId: req.userId })
-                    .sort({ createdAt: -1 });
-
-                if (!lastSearch || lastSearch.query.toLowerCase() !== normalizedQuery) {
-                    await SearchHistory.create({
-                        userId: req.userId,
-                        query: normalizedQuery,
-                        resultCount: finalResults.length
-                    });
-
-                    console.log("📝 Search history saved");
-                } else {
-                    console.log("⛔ Duplicate search ignored");
-                }
-
-            } catch (err) {
-                console.log("⚠️ History save failed:", err.message);
-            }
-        }
 
         return res.json({
             success: true,
