@@ -47,7 +47,7 @@ const tokenize = (text) => {
 /* =========================
    EXPAND SYNONYMS
 ========================= */
-const expandWord = (word) => {
+/*const expandWord = (word) => {
     for (let key in DESIGNATION_MAP) {
         if (DESIGNATION_MAP[key].includes(word)) {
             return DESIGNATION_MAP[key];
@@ -59,7 +59,7 @@ const expandWord = (word) => {
 /* =========================
    SMART QUERY BUILDER
 ========================= */
-const buildSmartQuery = (tokens) => {
+/*const buildSmartQuery = (tokens) => {
     if (!tokens.length) return {};
 
     return {
@@ -83,16 +83,24 @@ const buildSmartQuery = (tokens) => {
             };
         })
     };
-};
+}; */
 
 /* =========================
    SMART SEARCH API (FIXED)
 ========================= */
 export const searchData = async (req, res) => {
     try {
-        const { query = "" } = req.query;
+        const {
+            query = "",
+            country = "",
+            state = "",
+            city = "",
+            designation = "",
+            industry = ""
+        } = req.query;
 
         console.log("🔥 Incoming Query:", query);
+        console.log("🎯 Filters:", { country, state, city, designation, industry });
 
         /* ================= STOP WORDS ================= */
         const STOP_WORDS = new Set([
@@ -112,14 +120,30 @@ export const searchData = async (req, res) => {
 
         console.log("🧠 Clean Tokens:", tokens);
 
+        /* ================= BUILD FILTER QUERY ================= */
+
+        const escapeRegex = (text) =>
+            text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const filterQuery = {};
+
+        if (country) filterQuery.country = new RegExp(escapeRegex(country), "i");
+        if (state) filterQuery.state = new RegExp(escapeRegex(state), "i");
+        if (city) filterQuery.city = new RegExp(escapeRegex(city), "i");
+        if (designation) filterQuery.designation = new RegExp(escapeRegex(designation), "i");
+        if (industry) filterQuery.company_industry = new RegExp(escapeRegex(industry), "i");
+
+        /* ================= FETCH EMPLOYEES (WITH FILTERS) ================= */
+        const employees = await Employee.find(filterQuery);
+
+        console.log("📦 FILTERED EMPLOYEES:", employees.length);
+
+        // 👉 If NO query → return filtered data directly
         if (!tokens.length) {
-            return res.json({ success: true, data: [] });
+            return res.json({
+                success: true,
+                data: employees
+            });
         }
-
-        /* ================= FETCH EMPLOYEES ================= */
-        const employees = await Employee.find({});
-
-        console.log("📦 TOTAL EMPLOYEES:", employees.length);
 
         /* ================= SCORING ================= */
         const scored = employees.map(emp => {
@@ -150,32 +174,30 @@ export const searchData = async (req, res) => {
         });
 
         /* ================= FILTER + SORT ================= */
-        const filtered = scored
+        const finalResults = scored
             .filter(emp => emp.score >= 1)
             .sort((a, b) => b.score - a.score);
 
-        console.log("🎯 FINAL RESULTS:", filtered.length);
+        console.log("🎯 FINAL RESULTS:", finalResults.length);
 
         /* ================= SAVE SEARCH HISTORY ================= */
         if (req.userId) {
             try {
                 const normalizedQuery = query.trim().toLowerCase();
 
-                // 🔍 check last search by same user
                 const lastSearch = await SearchHistory.findOne({ userId: req.userId })
                     .sort({ createdAt: -1 });
 
-                // 🚫 if same query as last time → don't save
-                if (lastSearch && lastSearch.query.toLowerCase() === normalizedQuery) {
-                    console.log("⛔ Duplicate search ignored");
-                } else {
+                if (!lastSearch || lastSearch.query.toLowerCase() !== normalizedQuery) {
                     await SearchHistory.create({
                         userId: req.userId,
                         query: normalizedQuery,
-                        resultCount: filtered.length
+                        resultCount: finalResults.length
                     });
 
                     console.log("📝 Search history saved");
+                } else {
+                    console.log("⛔ Duplicate search ignored");
                 }
 
             } catch (err) {
@@ -185,7 +207,7 @@ export const searchData = async (req, res) => {
 
         return res.json({
             success: true,
-            data: filtered
+            data: finalResults
         });
 
     } catch (err) {
