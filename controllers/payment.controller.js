@@ -12,17 +12,23 @@ const createOrder = async (req, res) => {
         const { planName } = req.body;
 
         const plan = PLAN_CONFIG[planName];
-        if (!plan) {
-            return res.status(400).json({ message: "Invalid plan" });
-        }
+        if (!plan) return res.status(400).json({ message: "Invalid plan" });
+
+        const user = await User.findById(req.userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
 
         const orderId = "order_" + Date.now();
 
-        const user = await User.findById(req.userId);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
+        // 1️⃣ Save payment first
+        await Payment.create({
+            orderId,
+            userId: user._id,
+            planName,
+            amount: plan.price,
+            status: "PENDING"
+        });
 
+        // 2️⃣ Cashfree request
         const request = {
             order_id: orderId,
             order_amount: plan.price,
@@ -36,23 +42,14 @@ const createOrder = async (req, res) => {
 
         const response = await cashfree.PGCreateOrder(request);
 
-        // ✅ Save payment in DB
-        await Payment.create({
-            orderId,
-            userId: user._id,
-            planName,
-            amount: plan.price,
-            status: "PENDING"
-        });
-
         res.json({
             paymentSessionId: response.data.payment_session_id,
             orderId
         });
 
     } catch (err) {
-        console.log("❌ Create Order Error:", err);
-        res.status(500).json({ message: "Order creation failed" });
+        console.log("Create Order Error:", err);
+        res.status(500).json({ message: "Payment failed" });
     }
 };
 
@@ -61,48 +58,46 @@ const createOrder = async (req, res) => {
  */
 const cashfreeWebhook = async (req, res) => {
     try {
+        console.log("🔥 Webhook Received:", req.body);
         const event = req.body;
 
+        console.log("🔥 Webhook Received:", event.type);
+
+        const orderId = event?.data?.order?.order_id;
+
+        const payment = await Payment.findOne({ orderId });
+        if (!payment) return res.sendStatus(200);
+
+        // 🔥 SUCCESS
         if (event.type === "PAYMENT_SUCCESS_WEBHOOK") {
 
-            const orderId = event.data.order.order_id;
-            const paymentId = event.data.payment.cf_payment_id;
-
-            // ✅ Fetch from DB instead of Map
-            const payment = await Payment.findOne({ orderId });
-
-            if (!payment || payment.status === "SUCCESS") {
+            if (payment.status === "SUCCESS") {
                 return res.sendStatus(200);
             }
 
             const user = await User.findById(payment.userId);
             if (!user) return res.sendStatus(200);
 
-            // ✅ Activate plan
             await activatePlan(user, payment.planName);
 
-            // ✅ Update DB
             payment.status = "SUCCESS";
-            payment.paymentId = paymentId;
+            payment.paymentId = event.data.payment.cf_payment_id;
+
             await payment.save();
 
-            console.log("✅ Plan Activated:", payment.planName);
+            console.log("✅ PLAN ACTIVATED:", payment.planName);
         }
 
-        // (Optional) handle failure
+        // ❌ FAILED
         if (event.type === "PAYMENT_FAILED_WEBHOOK") {
-            const orderId = event.data.order.order_id;
-
-            await Payment.findOneAndUpdate(
-                { orderId },
-                { status: "FAILED" }
-            );
+            payment.status = "FAILED";
+            await payment.save();
         }
 
         res.sendStatus(200);
 
     } catch (err) {
-        console.log("❌ Webhook Error:", err);
+        console.log("Webhook Error:", err);
         res.sendStatus(500);
     }
 };
