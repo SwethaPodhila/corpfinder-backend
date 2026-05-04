@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const User = require("../models/user.model").default;
+const User = require("../models/user.model");
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 const jwt = require("jsonwebtoken");
@@ -55,8 +55,15 @@ const register = async (req, res) => {
             password: hash,
             otp,
             otpExpiry: new Date(Date.now() + 2 * 60 * 1000),
+
             trialEndsAt,
+
             planId: planId || 1,
+            planName: "free",           // ✅ NEW
+            credits: 50,                // ✅ NEW
+            planStartDate: new Date(),  // ✅ NEW
+            planEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // ✅ NEW
+
             status: "ACTIVE",
             isVerified: false
         });
@@ -174,14 +181,20 @@ const login = async (req, res) => {
         if (!user.isVerified)
             return res.status(403).json({ msg: "Verify email first" });
 
-        // ⏳ Trial expiry check
-        if (new Date() > user.trialEndsAt) {
-            user.status = "INACTIVE";
-            await user.save();
+        // 🔥 PLAN EXPIRY CHECK
+        if (user.planEndDate) {
+            const now = new Date();
 
-            return res.status(403).json({
-                msg: "Trial expired. Please upgrade plan"
-            });
+            if (now > user.planEndDate) {
+                // fallback to free plan
+                user.planName = "free";
+                user.planId = 1;
+                user.credits = 0;
+                user.planStartDate = now;
+                user.planEndDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+                await user.save();
+            }
         }
 
         // ❌ Status check
@@ -227,6 +240,72 @@ const login = async (req, res) => {
     }
 };
 
+const getUserStatus = async (req, res) => {
+    try {
+        if (!req.userId) {
+            return res.status(401).json({ msg: "Unauthorized" });
+        }
+
+        const user = await User.findById(req.userId);
+
+        if (!user) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        let message = "";
+
+        if (user.planEndDate) {
+            const now = new Date();
+            const diff = user.planEndDate - now;
+            const daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+
+            if (daysLeft <= 2 && daysLeft > 0) {
+                message = `⚠️ Your plan will expire in ${daysLeft} day(s)`;
+            }
+
+            if (daysLeft <= 0) {
+                message = "❌ Plan expired. Please upgrade.";
+            }
+        }
+
+        return res.json({
+            plan: user.planName || "free",
+            credits: user.credits ?? 0,
+            planEndDate: user.planEndDate || null,
+            message
+        });
+
+    } catch (err) {
+        console.log("STATUS ERROR:", err);
+        return res.status(500).json({ msg: err.message });
+    }
+};
+
+const deductCredits = async (req, res) => {
+    try {
+        const { count = 1 } = req.body;
+
+        const user = await User.findById(req.user.id);
+
+        if (user.credits < count) {
+            return res.status(400).json({
+                msg: "Not enough credits"
+            });
+        }
+
+        user.credits -= count;
+        await user.save();
+
+        res.json({
+            msg: "Credits deducted",
+            remainingCredits: user.credits
+        });
+
+    } catch (err) {
+        res.status(500).json({ msg: err.message });
+    }
+};
+
 const getUsers = async (req, res) => {
     try {
         const users = await User.find()
@@ -245,5 +324,7 @@ module.exports = {
     verifyOtp,
     resendOtp,
     login,
-    getUsers
+    getUsers,
+    getUserStatus,
+    deductCredits
 };

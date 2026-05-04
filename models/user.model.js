@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
     fullName: String,
@@ -13,11 +13,17 @@ const userSchema = new mongoose.Schema({
 
     status: { type: String, default: "ACTIVE" },
 
-    trialEndsAt: Date,
+    planId: { type: Number, default: 1 },
+    planName: { type: String, default: "free" },
 
-    planId: { type: Number, default: 1 }
+    credits: { type: Number, default: 50 },
+
+    planStartDate: Date,
+    planEndDate: Date,
+
+    lastCreditReset: Date,
+
+    trialEndsAt: Date
 });
 
-const User = mongoose.model("User", userSchema);
-
-export default User;
+module.exports = mongoose.model("User", userSchema);
