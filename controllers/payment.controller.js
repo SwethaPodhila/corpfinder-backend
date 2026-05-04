@@ -4,9 +4,9 @@ const { PLAN_CONFIG } = require("../utils/planConfig");
 const { activatePlan } = require("../utils/activatePlan");
 const Payment = require("../models/payment");
 
-/**
- * CREATE ORDER
- */
+// 💱 simple conversion (you can replace with real FX API later)
+const USD_TO_INR = 1;
+
 const createOrder = async (req, res) => {
     try {
         const { planName } = req.body;
@@ -19,7 +19,12 @@ const createOrder = async (req, res) => {
 
         const orderId = "order_" + Date.now();
 
-        // 1️⃣ Save payment first
+        // 💰 convert USD → INR
+        const amountInINR = plan.currency === "USD"
+            ? Math.round(plan.price * USD_TO_INR)
+            : plan.price;
+
+        // Save payment
         await Payment.create({
             orderId,
             userId: user._id,
@@ -28,15 +33,14 @@ const createOrder = async (req, res) => {
             status: "PENDING"
         });
 
-        // 2️⃣ Cashfree request
         const request = {
             order_id: orderId,
-            order_amount: plan.price,
+            order_amount: amountInINR,
             order_currency: "INR",
             customer_details: {
                 customer_id: user._id.toString(),
                 customer_email: user.email,
-                customer_phone: user.phone
+                customer_phone: user.phone || "9999999999"
             }
         };
 
@@ -53,22 +57,14 @@ const createOrder = async (req, res) => {
     }
 };
 
-/**
- * WEBHOOK
- */
 const cashfreeWebhook = async (req, res) => {
     try {
-        console.log("🔥 Webhook Received:", req.body);
         const event = req.body;
-
-        console.log("🔥 Webhook Received:", event.type);
-
         const orderId = event?.data?.order?.order_id;
 
         const payment = await Payment.findOne({ orderId });
         if (!payment) return res.sendStatus(200);
 
-        // 🔥 SUCCESS
         if (event.type === "PAYMENT_SUCCESS_WEBHOOK") {
 
             if (payment.status === "SUCCESS") {
@@ -88,7 +84,6 @@ const cashfreeWebhook = async (req, res) => {
             console.log("✅ PLAN ACTIVATED:", payment.planName);
         }
 
-        // ❌ FAILED
         if (event.type === "PAYMENT_FAILED_WEBHOOK") {
             payment.status = "FAILED";
             await payment.save();

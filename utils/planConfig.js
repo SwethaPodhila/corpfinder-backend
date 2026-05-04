@@ -6,12 +6,14 @@ export const PLAN_CONFIG = {
     },
     pro: {
         credits: 2500,
-        price: 999,
+        price: 1,
+        currency: "USD",
         durationDays: 30
     },
     premium: {
         credits: 5000,
-        price: 1999,
+        price: 2,
+        currency: "USD",
         durationDays: 30
     }
 };
