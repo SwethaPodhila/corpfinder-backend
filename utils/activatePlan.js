@@ -1,17 +1,34 @@
 import { PLAN_CONFIG } from "./planConfig.js";
 
 export const activatePlan = async (user, planName) => {
-    const plan = PLAN_CONFIG[planName];
+    try {
+        const plan = PLAN_CONFIG[planName];
 
-    const now = new Date();
-    const endDate = new Date();
-    endDate.setDate(now.getDate() + plan.durationDays);
+        if (!plan) {
+            throw new Error("Invalid plan: " + planName);
+        }
 
-    user.planName = planName;
-    user.planStartDate = now;
-    user.planEndDate = endDate;
+        const now = new Date();
 
-    user.credits = plan.credits;
+        const endDate = new Date(now);
+        endDate.setDate(endDate.getDate() + plan.durationDays);
 
-    await user.save();
+        user.planName = planName;
+        user.planStartDate = now;
+        user.planEndDate = endDate;
+        user.credits = plan.credits;
+
+        await user.save();
+
+        console.log("✅ PLAN UPDATED:", {
+            planName,
+            credits: plan.credits,
+            start: now,
+            end: endDate
+        });
+
+    } catch (err) {
+        console.log("❌ activatePlan error:", err.message);
+        throw err;
+    }
 };
