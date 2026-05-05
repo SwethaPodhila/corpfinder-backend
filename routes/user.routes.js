@@ -9,7 +9,7 @@ router.post("/verify-otp", userController.verifyOtp);
 router.post("/resend-otp", userController.resendOtp);
 router.post("/login", userController.login);
 router.get("/users", userController.getUsers); // 🔥 GET all users
-router.get("/status",verifyUser, userController.getUserStatus); // 🔥 GET current user's plan & credit
-router.post("/deduct-credits", userController.deductCredits); // 🔥 DEDUCT credits after each use
+router.get("/status", verifyUser, userController.getUserStatus); // 🔥 GET current user's plan & credit
+router.post("/deduct-credits", verifyUser, userController.deductCredit); // 🔥 DEDUCT credits after each use
 
 module.exports = router;

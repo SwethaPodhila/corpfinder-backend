@@ -158,6 +158,31 @@ export const searchData = async (req, res) => {
 
         console.log("🎯 FINAL RESULTS:", finalResults.length);
 
+        const userId = req.userId;
+
+        console.log("👤 USER ID:", userId);
+
+        if (userId && finalResults.length > 0) {
+
+            const lastSearch = await SearchHistory.findOne({ userId })
+                .sort({ createdAt: -1 });
+
+            const isSameQuery =
+                lastSearch?.query?.trim().toLowerCase() === query.trim().toLowerCase();
+
+            if (!isSameQuery) {
+                await SearchHistory.create({
+                    userId,
+                    query,
+                    resultCount: finalResults.length
+                });
+
+                console.log("🟢 SEARCH HISTORY SAVED");
+            } else {
+                console.log("🟡 DUPLICATE QUERY SKIPPED");
+            }
+        }
+
         return res.json({
             success: true,
             data: finalResults

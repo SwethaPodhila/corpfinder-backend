@@ -281,28 +281,39 @@ const getUserStatus = async (req, res) => {
     }
 };
 
-const deductCredits = async (req, res) => {
+const deductCredit = async (req, res) => {
     try {
-        const { count = 1 } = req.body;
+        const userId = req.userId;
+        const { employeeId } = req.body;
 
-        const user = await User.findById(req.user.id);
-
-        if (user.credits < count) {
-            return res.status(400).json({
-                msg: "Not enough credits"
-            });
+        if (!userId) {
+            return res.status(401).json({ success: false, msg: "Unauthorized" });
         }
 
-        user.credits -= count;
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ success: false, msg: "User not found" });
+        }
+
+        if (user.credits <= 0) {
+            return res.status(400).json({ success: false, msg: "No credits" });
+        }
+
+        user.credits -= 1;
         await user.save();
 
-        res.json({
-            msg: "Credits deducted",
-            remainingCredits: user.credits
+        return res.json({
+            success: true,
+            credits: user.credits
         });
 
     } catch (err) {
-        res.status(500).json({ msg: err.message });
+        console.log("❌ deductCredit error:", err);
+        return res.status(500).json({
+            success: false,
+            msg: err.message
+        });
     }
 };
 
@@ -326,5 +337,5 @@ module.exports = {
     login,
     getUsers,
     getUserStatus,
-    deductCredits
+    deductCredit
 };
