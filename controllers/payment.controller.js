@@ -72,7 +72,9 @@ const verifySignature = (rawBody, signature) => {
 const cashfreeWebhook = async (req, res) => {
     try {
         // 🔥 raw body from app.js middleware
-        const rawBody = req.body.toString();
+        const rawBody = req.body instanceof Buffer
+            ? req.body.toString("utf8")
+            : req.rawBody; // fallback
 
         const signature =
             req.headers["x-webhook-signature"] ||
