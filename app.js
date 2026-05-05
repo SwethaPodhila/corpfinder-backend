@@ -10,6 +10,11 @@ const app = express();
 
 app.use(cors());
 
+app.use(
+    "/payment/webhook",
+    express.raw({ type: "application/json" })
+);
+
 app.use(express.json());
 
 const userRoutes = require("./routes/user.routes");

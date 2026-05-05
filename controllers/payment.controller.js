@@ -71,18 +71,23 @@ const verifySignature = (rawBody, signature) => {
 
 const cashfreeWebhook = async (req, res) => {
     try {
-        const event = req.body;
-        console.log("RawBody:", req.rawBody);
+        // 🔥 raw body from app.js middleware
+        const rawBody = req.body.toString();
 
-        const signature = req.headers["x-webhook-signature"];
+        const signature =
+            req.headers["x-webhook-signature"] ||
+            req.headers["x-cashfree-signature"];
 
-        // 🔐 1. SECURITY CHECK (VERY IMPORTANT)
-        const isValid = verifySignature(req.rawBody, signature);
+        console.log("RawBody:", rawBody);
+
+        const isValid = verifySignature(rawBody, signature);
 
         if (!isValid) {
             console.log("❌ Invalid webhook signature");
             return res.sendStatus(401);
         }
+
+        const event = JSON.parse(rawBody);
 
         const orderId = event?.data?.order?.order_id;
 
