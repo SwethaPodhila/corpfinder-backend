@@ -72,6 +72,7 @@ const verifySignature = (rawBody, signature) => {
 const cashfreeWebhook = async (req, res) => {
     try {
         const event = req.body;
+        console.log("RawBody:", req.rawBody);
 
         const signature = req.headers["x-webhook-signature"];
 
