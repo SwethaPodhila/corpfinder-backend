@@ -8,7 +8,7 @@ const crypto = require("crypto");
 // 💱 simple conversion (you can replace with real FX API later)
 const USD_TO_INR = 1;
 
-const CASHFREE_SECRET = process.env.CF_SECRET || "your_cashfree_secret_here";
+const CASHFREE_SECRET = process.env.CF_SECRET_KEY || "your_cashfree_secret_here";
 
 const createOrder = async (req, res) => {
     try {
