@@ -92,7 +92,7 @@ const cashfreeWebhook = async (req, res) => {
 
         console.log("📨 Headers:", req.headers);
 
-        const rawBody = req.rawBody;
+        const rawBody = req.body.toString("utf8");
 
         const signature =
             req.headers["x-webhook-signature"] ||
@@ -104,9 +104,9 @@ const cashfreeWebhook = async (req, res) => {
         console.log("📨 Signature header:", signature);
         console.log("⏱️ Timestamp header:", timestamp);
 
-        if (!rawBody) {
-            console.log("❌ rawBody is missing → middleware issue");
-        }
+        /* if (!rawBody) {
+             console.log("❌ rawBody is missing → middleware issue");
+         }*/
 
         if (!signature) {
             console.log("❌ signature missing");
