@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
+const { cashfreeWebhook } = require("./controllers/payment.controller");
 dotenv.config();
 connectDB();
 
@@ -10,11 +11,12 @@ const app = express();
 
 app.use(cors());
 
-app.use(
+// 🔥 1. WEBHOOK FIRST (RAW BODY)
+app.post(
     "/payment/webhook",
-    express.raw({ type: "application/json" })
+    express.raw({ type: "application/json" }),
+    cashfreeWebhook
 );
-
 app.use(express.json());
 
 const userRoutes = require("./routes/user.routes");
