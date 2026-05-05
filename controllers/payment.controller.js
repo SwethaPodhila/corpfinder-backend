@@ -60,84 +60,123 @@ const createOrder = async (req, res) => {
     }
 };
 
-const verifySignature = (rawBody, signature) => {
+const verifySignature = (rawBody, signature, timestamp) => {
+    console.log("\n🔐 ===== SIGNATURE DEBUG START =====");
+
+    console.log("📦 RawBody:", rawBody);
+    console.log("📨 Received Signature:", signature);
+    console.log("⏱️ Timestamp:", timestamp);
+
+    const signedPayload = timestamp + rawBody;
+
+    console.log("🧩 SignedPayload (timestamp + body):", signedPayload);
+
     const expectedSignature = crypto
         .createHmac("sha256", CASHFREE_SECRET)
-        .update(rawBody)
+        .update(signedPayload)
         .digest("base64");
 
-    return expectedSignature === signature;
+    console.log("🔐 Expected Signature:", expectedSignature);
+
+    const isMatch = expectedSignature === signature;
+
+    console.log(isMatch ? "✅ SIGNATURE MATCH" : "❌ SIGNATURE MISMATCH");
+    console.log("🔐 ===== SIGNATURE DEBUG END =====\n");
+
+    return isMatch;
 };
 
 const cashfreeWebhook = async (req, res) => {
     try {
-        // 🔥 raw body from app.js middleware
-        console.log("Webhook hit with headers:", req.headers);
-        const rawBody = req.body instanceof Buffer
-            ? req.body.toString("utf8")
-            : req.rawBody; // fallback
+        console.log("\n🚀 ===== WEBHOOK HIT =====");
+
+        console.log("📨 Headers:", req.headers);
+
+        const rawBody = req.rawBody;
 
         const signature =
             req.headers["x-webhook-signature"] ||
             req.headers["x-cashfree-signature"];
 
-        console.log("RawBody:", rawBody);
+        const timestamp = req.headers["x-webhook-timestamp"];
 
-        const isValid = verifySignature(rawBody, signature);
+        console.log("📦 RawBody from middleware:", rawBody);
+        console.log("📨 Signature header:", signature);
+        console.log("⏱️ Timestamp header:", timestamp);
+
+        if (!rawBody) {
+            console.log("❌ rawBody is missing → middleware issue");
+        }
+
+        if (!signature) {
+            console.log("❌ signature missing");
+        }
+
+        if (!timestamp) {
+            console.log("❌ timestamp missing");
+        }
+
+        const isValid = verifySignature(rawBody, signature, timestamp);
 
         if (!isValid) {
-            console.log("❌ Invalid webhook signature");
+            console.log("❌ FINAL RESULT: Invalid webhook signature");
             return res.sendStatus(401);
         }
 
+        console.log("✅ FINAL RESULT: Signature Verified");
+
         const event = JSON.parse(rawBody);
 
-        const orderId = event?.data?.order?.order_id;
+        console.log("📢 Event Type:", event.type);
 
-        // 🔎 2. Find payment
+        const orderId = event?.data?.order?.order_id;
+        console.log("🧾 Order ID:", orderId);
+
         const payment = await Payment.findOne({ orderId });
 
-        if (!payment) return res.sendStatus(200);
+        if (!payment) {
+            console.log("❌ Payment not found in DB");
+            return res.sendStatus(200);
+        }
 
-        // =========================
-        // ✅ PAYMENT SUCCESS
-        // =========================
+        console.log("💾 Payment status in DB:", payment.status);
+
         if (event.type === "PAYMENT_SUCCESS_WEBHOOK") {
+            console.log("💰 PAYMENT SUCCESS CASE");
 
-            // 🔁 Idempotency check (avoid duplicate processing)
             if (payment.status === "SUCCESS") {
+                console.log("♻️ Already processed");
                 return res.sendStatus(200);
             }
 
             const user = await User.findById(payment.userId);
-            if (!user) return res.sendStatus(200);
 
-            // 🎁 Activate plan
+            if (!user) {
+                console.log("❌ User not found");
+                return res.sendStatus(200);
+            }
+
+            console.log("👤 User found:", user.email);
+
             await activatePlan(user, payment.planName);
+            console.log("🎁 Plan activated");
 
-            // 💾 Update DB
             payment.status = "SUCCESS";
             payment.paymentId = event?.data?.payment?.cf_payment_id;
 
             await payment.save();
 
-            console.log("✅ PLAN ACTIVATED:", payment.planName);
+            console.log("✅ Payment updated in DB");
         }
 
-        // =========================
-        // ❌ PAYMENT FAILED
-        // =========================
         if (event.type === "PAYMENT_FAILED_WEBHOOK") {
+            console.log("❌ PAYMENT FAILED CASE");
 
-            if (payment.status !== "FAILED") {
-                payment.status = "FAILED";
-                await payment.save();
-            }
-
-            console.log("❌ PAYMENT FAILED:", orderId);
+            payment.status = "FAILED";
+            await payment.save();
         }
 
-        // Always acknowledge
+        console.log("🏁 WEBHOOK DONE\n");
         return res.sendStatus(200);
 
     } catch (err) {
