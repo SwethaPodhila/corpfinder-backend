@@ -162,7 +162,7 @@ export const searchData = async (req, res) => {
 
         console.log("👤 USER ID:", userId);
 
-        if (userId && finalResults.length > 0) {
+        if (userId && finalResults.length > 0 && query.trim()) {
 
             const lastSearch = await SearchHistory.findOne({ userId })
                 .sort({ createdAt: -1 });
