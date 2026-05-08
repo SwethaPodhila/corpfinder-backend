@@ -56,26 +56,58 @@ export const addEmployee = async (req, res) => {
 
 export const uploadEmployees = async (req, res) => {
     try {
+
+        console.log("🚀 Upload API hit");
+
+        // ✅ File check
         if (!req.file) {
-            return res.status(400).json({ msg: "No file uploaded ❗" });
+            console.log("❌ No file received");
+
+            return res.status(400).json({
+                msg: "No file uploaded ❗"
+            });
         }
 
+        console.log("✅ File received:", req.file.originalname);
+        console.log("📦 File size:", req.file.size);
+
+        // ✅ Read workbook
         const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+        console.log("✅ Workbook loaded");
+
+        const sheetName = workbook.SheetNames[0];
+
+        console.log("📄 Sheet Name:", sheetName);
+
+        const sheet = workbook.Sheets[sheetName];
+
         let data = XLSX.utils.sheet_to_json(sheet);
 
+        console.log("📊 Total rows from excel:", data.length);
+
         if (!data.length) {
-            return res.status(400).json({ msg: "Empty file ❗" });
+
+            console.log("❌ Empty excel file");
+
+            return res.status(400).json({
+                msg: "Empty file ❗"
+            });
         }
 
         // 🔥 normalize keys
-        const normalizedData = data.map(row => {
+        const normalizedData = data.map((row, index) => {
+
             const newRow = {};
+
             Object.keys(row).forEach(key => {
                 newRow[key.toLowerCase().trim()] = row[key];
             });
+
             return newRow;
         });
+
+        console.log("✅ Data normalization completed");
 
         const validData = [];
         const errors = [];
@@ -85,7 +117,11 @@ export const uploadEmployees = async (req, res) => {
 
         const seen = new Set();
 
+        // 🔥 Loop start
         for (let i = 0; i < normalizedData.length; i++) {
+
+            console.log(`➡️ Processing row: ${i + 1}`);
+
             const item = normalizedData[i];
 
             // 👤 Employee
@@ -120,9 +156,10 @@ export const uploadEmployees = async (req, res) => {
             const company_founded = clean(item.company_founded);
             const company_description = clean(item.company_description);
 
-            const identifier = `${first_name || "Unknown"} (${business_email || "No Email"})`;
+            const identifier =
+                `${first_name || "Unknown"} (${business_email || "No Email"})`;
 
-            // 🔴 REQUIRED VALIDATION (UPDATED)
+            // 🔴 REQUIRED VALIDATION
             const missingFields = [];
 
             if (!first_name) missingFields.push("first_name");
@@ -134,25 +171,39 @@ export const uploadEmployees = async (req, res) => {
             if (!personal_email) missingFields.push("personal_email");
             if (!phone) missingFields.push("phone");
 
-            //if (!company_email) missingFields.push("company_email");
-            //if (!company_phone) missingFields.push("company_phone");
             if (!company_type) missingFields.push("company_type");
             if (!company_industry) missingFields.push("company_industry");
 
             if (missingFields.length > 0) {
-                errors.push(`${identifier}: Missing → ${missingFields.join(", ")}`);
+
+                console.log(
+                    `❌ Validation failed row ${i + 1}:`,
+                    missingFields
+                );
+
+                errors.push(
+                    `${identifier}: Missing → ${missingFields.join(", ")}`
+                );
+
                 continue;
             }
 
             // 🔥 UNIQUE KEY
-            const uniqueKey = `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
+            const uniqueKey =
+                `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
 
             if (seen.has(uniqueKey)) {
+
+                console.log(`⚠️ Duplicate in file row ${i + 1}`);
+
                 duplicates.push(`${identifier}: Duplicate in file`);
+
                 continue;
             }
 
             seen.add(uniqueKey);
+
+            console.log(`🔎 Checking DB duplicate row ${i + 1}`);
 
             // ❌ DB duplicate
             const exists = await Employee.findOne({
@@ -165,12 +216,15 @@ export const uploadEmployees = async (req, res) => {
             });
 
             if (exists) {
+
+                console.log(`⚠️ Already exists in DB row ${i + 1}`);
+
                 duplicates.push(`${identifier}: Already exists in DB`);
+
                 continue;
             }
 
             validData.push({
-                // employee
                 first_name,
                 last_name,
                 designation,
@@ -184,7 +238,6 @@ export const uploadEmployees = async (req, res) => {
                 linkedin_url,
                 description: description || null,
 
-                // company
                 company_name,
                 company_email,
                 company_phone,
@@ -201,11 +254,22 @@ export const uploadEmployees = async (req, res) => {
 
                 adminId: req.adminId
             });
+
+            console.log(`✅ Row ${i + 1} added`);
         }
 
+        console.log("📦 Total valid data:", validData.length);
+
         if (validData.length > 0) {
+
+            console.log("🚀 insertMany started");
+
             await Employee.insertMany(validData);
+
+            console.log("✅ insertMany completed");
         }
+
+        console.log("🎉 Upload completed successfully");
 
         return res.json({
             msg: "Upload completed ✅",
@@ -217,8 +281,14 @@ export const uploadEmployees = async (req, res) => {
         });
 
     } catch (err) {
+
+        console.log("💥 UPLOAD ERROR:");
         console.log(err);
-        res.status(500).json({ msg: "Upload failed ❌" });
+
+        return res.status(500).json({
+            msg: "Upload failed ❌",
+            error: err.message
+        });
     }
 };
 
