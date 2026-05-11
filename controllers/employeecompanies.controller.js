@@ -1,5 +1,6 @@
 import Employee from "../models/EmployeeCompany.js";
 import XLSX from "xlsx";
+import fs from "fs";
 import csv from "csv-parser";
 
 export const addEmployee = async (req, res) => {
