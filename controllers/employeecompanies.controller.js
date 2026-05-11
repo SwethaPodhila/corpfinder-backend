@@ -1,5 +1,7 @@
 import Employee from "../models/EmployeeCompany.js";
 import XLSX from "xlsx";
+import csv from "csv-parser";
+
 
 export const addEmployee = async (req, res) => {
     try {
@@ -55,65 +57,26 @@ export const addEmployee = async (req, res) => {
 };
 
 export const uploadEmployees = async (req, res) => {
+
     try {
 
         console.log("🚀 Upload API hit");
 
-        // ✅ File check
+        // ✅ file check
         if (!req.file) {
             return res.status(400).json({
                 msg: "No file uploaded ❗"
             });
         }
 
-        console.log("✅ File received:", req.file.originalname);
+        console.log("✅ File:", req.file.originalname);
         console.log("📦 File size:", req.file.size);
 
-        // ✅ Read workbook
-        const workbook = XLSX.read(req.file.buffer, {
-            type: "buffer"
-        });
-
-        const sheetName = workbook.SheetNames[0];
-
-        const sheet = workbook.Sheets[sheetName];
-
-        let data = XLSX.utils.sheet_to_json(sheet);
-
-        console.log("📊 Total rows:", data.length);
-
-        // ✅ Empty check
-        if (!data.length) {
-            return res.status(400).json({
-                msg: "Empty file ❗"
-            });
-        }
-
-        // ✅ Limit rows
-        if (data.length > 3000) {
-            return res.status(400).json({
-                msg: "Maximum 3000 rows allowed ❗"
-            });
-        }
-
-        // ✅ Normalize keys
-        const normalizedData = data.map((row) => {
-
-            const newRow = {};
-
-            Object.keys(row).forEach(key => {
-                newRow[key.toLowerCase().trim()] = row[key];
-            });
-
-            return newRow;
-        });
-
-        // ✅ Fetch existing employees ONLY ONCE
+        // ✅ existing employees only once
         const existingEmployees = await Employee.find({
             adminId: req.adminId
         }).lean();
 
-        // ✅ Create set for fast duplicate checking
         const existingSet = new Set(
             existingEmployees.map(emp =>
                 `${emp.first_name}-${emp.designation}-${emp.company_name}-${emp.city}-${emp.state}-${emp.country}`.toLowerCase()
@@ -124,163 +87,196 @@ export const uploadEmployees = async (req, res) => {
         const errors = [];
         const duplicates = [];
 
-        const clean = (val) => val?.toString().trim();
-
-        // ✅ duplicates inside uploaded excel
         const seen = new Set();
 
-        // 🔥 Loop start
-        for (let i = 0; i < normalizedData.length; i++) {
+        const clean = (val) => val?.toString().trim();
 
-            const item = normalizedData[i];
+        let totalRows = 0;
 
-            // 👤 Employee
-            const first_name = clean(item.first_name);
-            const last_name = clean(item.last_name);
-            const designation = clean(item.designation);
+        // ✅ stream csv file
+        fs.createReadStream(req.file.path)
+            .pipe(csv())
+            .on("data", (item) => {
 
-            const personal_email = clean(item.personal_email);
-            const business_email = clean(item.business_email);
-            const phone = clean(item.phone);
+                totalRows++;
 
-            const city = clean(item.city);
-            const state = clean(item.state);
-            const country = clean(item.country);
+                // ✅ limit rows
+                if (totalRows > 3000) {
+                    return;
+                }
 
-            const linkedin_id = clean(item.linkedin_id);
-            const linkedin_url = clean(item.linkedin_url);
-            const description = clean(item.description);
+                // 👤 Employee
+                const first_name = clean(item.first_name);
+                const last_name = clean(item.last_name);
+                const designation = clean(item.designation);
 
-            // 🏢 Company
-            const company_name = clean(item.company_name);
-            const company_email = clean(item.company_email);
-            const company_phone = clean(item.company_phone);
-            const company_type = clean(item.company_type);
-            const company_industry = clean(item.company_industry);
-            const company_address = clean(item.company_address);
-            const company_website = clean(item.company_website);
-            const company_city = clean(item.company_city);
-            const company_state = clean(item.company_state);
-            const company_country = clean(item.company_country);
-            const company_linkedin_url = clean(item.company_linkedin_url);
-            const company_founded = clean(item.company_founded);
-            const company_description = clean(item.company_description);
+                const personal_email = clean(item.personal_email);
+                const business_email = clean(item.business_email);
+                const phone = clean(item.phone);
 
-            const identifier =
-                `${first_name || "Unknown"} (${business_email || "No Email"})`;
+                const city = clean(item.city);
+                const state = clean(item.state);
+                const country = clean(item.country);
 
-            // ✅ Required validation
-            const missingFields = [];
+                const linkedin_id = clean(item.linkedin_id);
+                const linkedin_url = clean(item.linkedin_url);
+                const description = clean(item.description);
 
-            if (!first_name) missingFields.push("first_name");
-            if (!designation) missingFields.push("designation");
-            if (!company_name) missingFields.push("company_name");
-            if (!city) missingFields.push("city");
-            if (!country) missingFields.push("country");
+                // 🏢 Company
+                const company_name = clean(item.company_name);
+                const company_email = clean(item.company_email);
+                const company_phone = clean(item.company_phone);
+                const company_type = clean(item.company_type);
+                const company_industry = clean(item.company_industry);
+                const company_address = clean(item.company_address);
+                const company_website = clean(item.company_website);
+                const company_city = clean(item.company_city);
+                const company_state = clean(item.company_state);
+                const company_country = clean(item.company_country);
+                const company_linkedin_url = clean(item.company_linkedin_url);
+                const company_founded = clean(item.company_founded);
+                const company_description = clean(item.company_description);
 
-            if (!personal_email) missingFields.push("personal_email");
-            if (!phone) missingFields.push("phone");
+                const identifier =
+                    `${first_name || "Unknown"} (${business_email || "No Email"})`;
 
-            if (!company_type) missingFields.push("company_type");
-            if (!company_industry) missingFields.push("company_industry");
+                // ✅ validations
+                const missingFields = [];
 
-            // ❌ Validation failed
-            if (missingFields.length > 0) {
+                if (!first_name) missingFields.push("first_name");
+                if (!designation) missingFields.push("designation");
+                if (!company_name) missingFields.push("company_name");
+                if (!city) missingFields.push("city");
+                if (!country) missingFields.push("country");
 
-                errors.push(
-                    `${identifier}: Missing → ${missingFields.join(", ")}`
-                );
+                if (!personal_email) missingFields.push("personal_email");
+                if (!phone) missingFields.push("phone");
 
-                continue;
-            }
+                if (!company_type) missingFields.push("company_type");
+                if (!company_industry) missingFields.push("company_industry");
 
-            // ✅ Unique key
-            const uniqueKey =
-                `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
+                // ❌ validation fail
+                if (missingFields.length > 0) {
 
-            // ❌ Duplicate inside excel
-            if (seen.has(uniqueKey)) {
+                    errors.push(
+                        `${identifier}: Missing → ${missingFields.join(", ")}`
+                    );
 
-                duplicates.push(
-                    `${identifier}: Duplicate in uploaded file`
-                );
+                    return;
+                }
 
-                continue;
-            }
+                // ✅ unique key
+                const uniqueKey =
+                    `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
 
-            seen.add(uniqueKey);
+                // ❌ duplicate inside uploaded file
+                if (seen.has(uniqueKey)) {
 
-            // ❌ Duplicate in DB
-            if (existingSet.has(uniqueKey)) {
+                    duplicates.push(
+                        `${identifier}: Duplicate in uploaded file`
+                    );
 
-                duplicates.push(
-                    `${identifier}: Already exists in DB`
-                );
+                    return;
+                }
 
-                continue;
-            }
+                seen.add(uniqueKey);
 
-            // ✅ Add current row to set
-            existingSet.add(uniqueKey);
+                // ❌ duplicate in DB
+                if (existingSet.has(uniqueKey)) {
 
-            // ✅ Add valid data
-            validData.push({
-                first_name,
-                last_name,
-                designation,
-                personal_email,
-                business_email,
-                phone,
-                city,
-                state,
-                country,
-                linkedin_id,
-                linkedin_url,
-                description: description || null,
+                    duplicates.push(
+                        `${identifier}: Already exists in DB`
+                    );
 
-                company_name,
-                company_email,
-                company_phone,
-                company_type,
-                company_industry,
-                company_address,
-                company_website,
-                company_city,
-                company_state,
-                company_country,
-                company_linkedin_url,
-                company_founded,
-                company_description,
+                    return;
+                }
 
-                adminId: req.adminId
+                existingSet.add(uniqueKey);
+
+                // ✅ valid data
+                validData.push({
+                    first_name,
+                    last_name,
+                    designation,
+                    personal_email,
+                    business_email,
+                    phone,
+                    city,
+                    state,
+                    country,
+                    linkedin_id,
+                    linkedin_url,
+                    description: description || null,
+
+                    company_name,
+                    company_email,
+                    company_phone,
+                    company_type,
+                    company_industry,
+                    company_address,
+                    company_website,
+                    company_city,
+                    company_state,
+                    company_country,
+                    company_linkedin_url,
+                    company_founded,
+                    company_description,
+
+                    adminId: req.adminId
+                });
+            })
+
+            .on("end", async () => {
+
+                try {
+
+                    console.log("📊 Total rows:", totalRows);
+                    console.log("📦 Valid rows:", validData.length);
+
+                    // ✅ insert all
+                    if (validData.length > 0) {
+
+                        await Employee.insertMany(validData);
+
+                        console.log("✅ insertMany completed");
+                    }
+
+                    // ✅ delete uploaded file
+                    fs.unlinkSync(req.file.path);
+
+                    return res.json({
+                        msg: "Upload completed ✅",
+                        inserted: validData.length,
+                        errorsCount: errors.length,
+                        duplicateCount: duplicates.length,
+                        errors,
+                        duplicates
+                    });
+
+                } catch (err) {
+
+                    console.log("💥 Insert Error:", err);
+
+                    return res.status(500).json({
+                        msg: "Insert failed ❌",
+                        error: err.message
+                    });
+                }
+            })
+
+            .on("error", (err) => {
+
+                console.log("💥 CSV Read Error:", err);
+
+                return res.status(500).json({
+                    msg: "CSV processing failed ❌",
+                    error: err.message
+                });
             });
-        }
-
-        console.log("📦 Total valid data:", validData.length);
-
-        // ✅ Insert all at once
-        if (validData.length > 0) {
-
-            await Employee.insertMany(validData);
-
-            console.log("✅ insertMany completed");
-        }
-
-        console.log("🎉 Upload completed successfully");
-
-        return res.json({
-            msg: "Upload completed ✅",
-            inserted: validData.length,
-            errorsCount: errors.length,
-            duplicateCount: duplicates.length,
-            errors,
-            duplicates
-        });
 
     } catch (err) {
 
-        console.log("💥 UPLOAD ERROR:");
-        console.log(err);
+        console.log("💥 Upload Error:", err);
 
         return res.status(500).json({
             msg: "Upload failed ❌",
