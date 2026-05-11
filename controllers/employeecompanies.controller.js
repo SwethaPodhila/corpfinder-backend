@@ -2,7 +2,6 @@ import Employee from "../models/EmployeeCompany.js";
 import XLSX from "xlsx";
 import csv from "csv-parser";
 
-
 export const addEmployee = async (req, res) => {
     try {
         const data = req.body;
@@ -224,6 +223,26 @@ export const uploadEmployees = async (req, res) => {
 
                     adminId: req.adminId
                 });
+
+
+                // ✅ batch insert every 500 rows
+                if (validData.length >= 500) {
+
+                    stream.pause();
+
+                    Employee.insertMany(validData)
+                        .then(() => {
+
+                            console.log("✅ Batch inserted:", validData.length);
+
+                            validData.length = 0;
+
+                            stream.resume();
+                        })
+                        .catch(err => {
+                            console.log("💥 Batch Insert Error:", err);
+                        });
+                }
             })
 
             .on("end", async () => {
