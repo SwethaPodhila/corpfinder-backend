@@ -61,8 +61,6 @@ export const uploadEmployees = async (req, res) => {
 
         // ✅ File check
         if (!req.file) {
-            console.log("❌ No file received");
-
             return res.status(400).json({
                 msg: "No file uploaded ❗"
             });
@@ -72,31 +70,34 @@ export const uploadEmployees = async (req, res) => {
         console.log("📦 File size:", req.file.size);
 
         // ✅ Read workbook
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-
-        console.log("✅ Workbook loaded");
+        const workbook = XLSX.read(req.file.buffer, {
+            type: "buffer"
+        });
 
         const sheetName = workbook.SheetNames[0];
-
-        console.log("📄 Sheet Name:", sheetName);
 
         const sheet = workbook.Sheets[sheetName];
 
         let data = XLSX.utils.sheet_to_json(sheet);
 
-        console.log("📊 Total rows from excel:", data.length);
+        console.log("📊 Total rows:", data.length);
 
+        // ✅ Empty check
         if (!data.length) {
-
-            console.log("❌ Empty excel file");
-
             return res.status(400).json({
                 msg: "Empty file ❗"
             });
         }
 
-        // 🔥 normalize keys
-        const normalizedData = data.map((row, index) => {
+        // ✅ Limit rows
+        if (data.length > 3000) {
+            return res.status(400).json({
+                msg: "Maximum 3000 rows allowed ❗"
+            });
+        }
+
+        // ✅ Normalize keys
+        const normalizedData = data.map((row) => {
 
             const newRow = {};
 
@@ -107,7 +108,17 @@ export const uploadEmployees = async (req, res) => {
             return newRow;
         });
 
-        console.log("✅ Data normalization completed");
+        // ✅ Fetch existing employees ONLY ONCE
+        const existingEmployees = await Employee.find({
+            adminId: req.adminId
+        }).lean();
+
+        // ✅ Create set for fast duplicate checking
+        const existingSet = new Set(
+            existingEmployees.map(emp =>
+                `${emp.first_name}-${emp.designation}-${emp.company_name}-${emp.city}-${emp.state}-${emp.country}`.toLowerCase()
+            )
+        );
 
         const validData = [];
         const errors = [];
@@ -115,12 +126,11 @@ export const uploadEmployees = async (req, res) => {
 
         const clean = (val) => val?.toString().trim();
 
+        // ✅ duplicates inside uploaded excel
         const seen = new Set();
 
         // 🔥 Loop start
         for (let i = 0; i < normalizedData.length; i++) {
-
-            console.log(`➡️ Processing row: ${i + 1}`);
 
             const item = normalizedData[i];
 
@@ -159,7 +169,7 @@ export const uploadEmployees = async (req, res) => {
             const identifier =
                 `${first_name || "Unknown"} (${business_email || "No Email"})`;
 
-            // 🔴 REQUIRED VALIDATION
+            // ✅ Required validation
             const missingFields = [];
 
             if (!first_name) missingFields.push("first_name");
@@ -174,12 +184,8 @@ export const uploadEmployees = async (req, res) => {
             if (!company_type) missingFields.push("company_type");
             if (!company_industry) missingFields.push("company_industry");
 
+            // ❌ Validation failed
             if (missingFields.length > 0) {
-
-                console.log(
-                    `❌ Validation failed row ${i + 1}:`,
-                    missingFields
-                );
 
                 errors.push(
                     `${identifier}: Missing → ${missingFields.join(", ")}`
@@ -188,42 +194,36 @@ export const uploadEmployees = async (req, res) => {
                 continue;
             }
 
-            // 🔥 UNIQUE KEY
+            // ✅ Unique key
             const uniqueKey =
                 `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
 
+            // ❌ Duplicate inside excel
             if (seen.has(uniqueKey)) {
 
-                console.log(`⚠️ Duplicate in file row ${i + 1}`);
-
-                duplicates.push(`${identifier}: Duplicate in file`);
+                duplicates.push(
+                    `${identifier}: Duplicate in uploaded file`
+                );
 
                 continue;
             }
 
             seen.add(uniqueKey);
 
-            console.log(`🔎 Checking DB duplicate row ${i + 1}`);
+            // ❌ Duplicate in DB
+            if (existingSet.has(uniqueKey)) {
 
-            // ❌ DB duplicate
-            const exists = await Employee.findOne({
-                first_name,
-                company_name,
-                designation,
-                city,
-                state,
-                country
-            });
-
-            if (exists) {
-
-                console.log(`⚠️ Already exists in DB row ${i + 1}`);
-
-                duplicates.push(`${identifier}: Already exists in DB`);
+                duplicates.push(
+                    `${identifier}: Already exists in DB`
+                );
 
                 continue;
             }
 
+            // ✅ Add current row to set
+            existingSet.add(uniqueKey);
+
+            // ✅ Add valid data
             validData.push({
                 first_name,
                 last_name,
@@ -254,15 +254,12 @@ export const uploadEmployees = async (req, res) => {
 
                 adminId: req.adminId
             });
-
-            console.log(`✅ Row ${i + 1} added`);
         }
 
         console.log("📦 Total valid data:", validData.length);
 
+        // ✅ Insert all at once
         if (validData.length > 0) {
-
-            console.log("🚀 insertMany started");
 
             await Employee.insertMany(validData);
 
