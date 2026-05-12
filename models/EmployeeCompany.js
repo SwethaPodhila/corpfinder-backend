@@ -124,4 +124,16 @@ const employeeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// ✅ UNIQUE COMPOUND INDEX
+employeeSchema.index({
+    first_name: 1,
+    designation: 1,
+    company_name: 1,
+    city: 1,
+    state: 1,
+    country: 1
+}, {
+    unique: true
+});
+
 export default mongoose.model("Employee", employeeSchema);
