@@ -1,5 +1,8 @@
 import Employee from "../models/EmployeeCompany.js";
-import XLSX from "xlsx";
+//import XLSX from "xlsx";
+import fs from "fs";
+import path from "path";
+import csv from "csv-parser";
 
 export const addEmployee = async (req, res) => {
     try {
@@ -60,7 +63,6 @@ export const uploadEmployees = async (req, res) => {
 
         console.log("🚀 Upload API hit");
 
-        // ✅ File check
         if (!req.file) {
 
             return res.status(400).json({
@@ -70,217 +72,24 @@ export const uploadEmployees = async (req, res) => {
 
         console.log("✅ File received:", req.file.originalname);
 
-        // ✅ Read workbook
-        const workbook = XLSX.read(req.file.buffer, {
-            type: "buffer"
-        });
-
-        const sheetName = workbook.SheetNames[0];
-
-        const sheet = workbook.Sheets[sheetName];
-
-        const data = XLSX.utils.sheet_to_json(sheet);
-
-        console.log("📊 Total rows:", data.length);
-
-        if (!data.length) {
-
-            return res.status(400).json({
-                msg: "Empty file ❗"
-            });
-        }
-
-        // ✅ Normalize keys
-        const normalizedData = data.map((row) => {
-
-            const newRow = {};
-
-            Object.keys(row).forEach((key) => {
-
-                newRow[key.toLowerCase().trim()] = row[key];
-            });
-
-            return newRow;
-        });
-
         const errors = [];
         const duplicates = [];
 
         let insertedCount = 0;
 
-        // ✅ Batch array
         let batch = [];
 
-        // ✅ Duplicate check inside same file
         const seen = new Set();
+
+        const BATCH_SIZE = 1000;
 
         const clean = (val) =>
             val?.toString().trim();
 
-        // 🔥 LOOP START
-        for (let i = 0; i < normalizedData.length; i++) {
+        // ✅ Process Batch Function
+        const processBatch = async () => {
 
-            const item = normalizedData[i];
-
-            // 👤 Employee
-            const first_name = clean(item.first_name);
-            const last_name = clean(item.last_name);
-            const designation = clean(item.designation);
-
-            const personal_email = clean(item.personal_email);
-            const business_email = clean(item.business_email);
-            const phone = clean(item.phone);
-
-            const city = clean(item.city);
-            const state = clean(item.state);
-            const country = clean(item.country);
-
-            const linkedin_id = clean(item.linkedin_id);
-            const linkedin_url = clean(item.linkedin_url);
-            const description = clean(item.description);
-
-            // 🏢 Company
-            const company_name = clean(item.company_name);
-            const company_email = clean(item.company_email);
-            const company_phone = clean(item.company_phone);
-            const company_type = clean(item.company_type);
-            const company_industry = clean(item.company_industry);
-            const company_address = clean(item.company_address);
-            const company_website = clean(item.company_website);
-            const company_city = clean(item.company_city);
-            const company_state = clean(item.company_state);
-            const company_country = clean(item.company_country);
-            const company_linkedin_url = clean(item.company_linkedin_url);
-            const company_founded = clean(item.company_founded);
-            const company_description = clean(item.company_description);
-
-            const identifier =
-                `${first_name || "Unknown"} (${business_email || "No Email"})`;
-
-            // 🔴 Validation
-            const missingFields = [];
-
-            if (!first_name) missingFields.push("first_name");
-            if (!designation) missingFields.push("designation");
-            if (!company_name) missingFields.push("company_name");
-            if (!city) missingFields.push("city");
-            if (!country) missingFields.push("country");
-
-            if (!personal_email) missingFields.push("personal_email");
-            if (!phone) missingFields.push("phone");
-
-            if (!company_type) missingFields.push("company_type");
-            if (!company_industry) missingFields.push("company_industry");
-
-            if (missingFields.length > 0) {
-
-                errors.push(
-                    `${identifier}: Missing → ${missingFields.join(", ")}`
-                );
-
-                continue;
-            }
-
-            // ✅ Duplicate inside same uploaded file
-            const uniqueKey =
-                `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
-
-            if (seen.has(uniqueKey)) {
-
-                duplicates.push(
-                    `${identifier}: Duplicate inside uploaded file`
-                );
-
-                continue;
-            }
-
-            seen.add(uniqueKey);
-
-            // ✅ Add to batch
-            batch.push({
-
-                first_name,
-                last_name,
-                designation,
-
-                personal_email,
-                business_email,
-                phone,
-
-                city,
-                state,
-                country,
-
-                linkedin_id,
-                linkedin_url,
-
-                description: description || null,
-
-                company_name,
-                company_email,
-                company_phone,
-
-                company_type,
-                company_industry,
-
-                company_address,
-                company_website,
-
-                company_city,
-                company_state,
-                company_country,
-
-                company_linkedin_url,
-                company_founded,
-                company_description,
-
-                adminId: req.adminId
-            });
-
-            // ✅ Batch insert
-            if (batch.length === 1000) {
-
-                try {
-
-                    const inserted =
-                        await Employee.insertMany(batch, {
-                            ordered: false
-                        });
-
-                    insertedCount += inserted.length;
-
-                    console.log(
-                        `✅ Batch inserted: ${inserted.length}`
-                    );
-
-                } catch (err) {
-
-                    // Duplicate errors
-                    if (err.writeErrors) {
-
-                        duplicates.push(
-                            ...err.writeErrors.map(
-                                (e) =>
-                                    e.errmsg || "Duplicate skipped"
-                            )
-                        );
-
-                        insertedCount +=
-                            err.result?.nInserted || 0;
-
-                    } else {
-
-                        console.log(err);
-                    }
-                }
-
-                // ✅ Clear batch memory
-                batch = [];
-            }
-        }
-
-        // ✅ Insert remaining rows
-        if (batch.length > 0) {
+            if (batch.length === 0) return;
 
             try {
 
@@ -292,7 +101,7 @@ export const uploadEmployees = async (req, res) => {
                 insertedCount += inserted.length;
 
                 console.log(
-                    `✅ Final batch inserted: ${inserted.length}`
+                    `✅ Batch inserted: ${inserted.length}`
                 );
 
             } catch (err) {
@@ -314,29 +123,293 @@ export const uploadEmployees = async (req, res) => {
                     console.log(err);
                 }
             }
-        }
 
-        console.log("🎉 Upload completed");
+            // ✅ clear memory
+            batch = [];
+        };
 
-        return res.json({
+        // ✅ Stream CSV
+        const stream = fs
+            .createReadStream(req.file.path)
+            .pipe(csv());
 
-            msg: "Upload completed ✅",
+        stream.on("data", async (row) => {
 
-            inserted: insertedCount,
+            stream.pause();
 
-            errorsCount: errors.length,
+            try {
 
-            duplicateCount: duplicates.length,
+                // ✅ Normalize Keys
+                const item = {};
 
-            errors,
+                Object.keys(row).forEach((key) => {
 
-            duplicates
+                    item[key.toLowerCase().trim()] =
+                        row[key];
+                });
+
+                // 👤 Employee
+                const first_name =
+                    clean(item.first_name);
+
+                const last_name =
+                    clean(item.last_name);
+
+                const designation =
+                    clean(item.designation);
+
+                const personal_email =
+                    clean(item.personal_email);
+
+                const business_email =
+                    clean(item.business_email);
+
+                const phone =
+                    clean(item.phone);
+
+                const city =
+                    clean(item.city);
+
+                const state =
+                    clean(item.state);
+
+                const country =
+                    clean(item.country);
+
+                const linkedin_id =
+                    clean(item.linkedin_id);
+
+                const linkedin_url =
+                    clean(item.linkedin_url);
+
+                const description =
+                    clean(item.description);
+
+                // 🏢 Company
+                const company_name =
+                    clean(item.company_name);
+
+                const company_email =
+                    clean(item.company_email);
+
+                const company_phone =
+                    clean(item.company_phone);
+
+                const company_type =
+                    clean(item.company_type);
+
+                const company_industry =
+                    clean(item.company_industry);
+
+                const company_address =
+                    clean(item.company_address);
+
+                const company_website =
+                    clean(item.company_website);
+
+                const company_city =
+                    clean(item.company_city);
+
+                const company_state =
+                    clean(item.company_state);
+
+                const company_country =
+                    clean(item.company_country);
+
+                const company_linkedin_url =
+                    clean(item.company_linkedin_url);
+
+                const company_founded =
+                    clean(item.company_founded);
+
+                const company_description =
+                    clean(item.company_description);
+
+                const identifier =
+                    `${first_name || "Unknown"} (${business_email || "No Email"})`;
+
+                // ✅ Validation
+                const missingFields = [];
+
+                if (!first_name)
+                    missingFields.push("first_name");
+
+                if (!designation)
+                    missingFields.push("designation");
+
+                if (!company_name)
+                    missingFields.push("company_name");
+
+                if (!city)
+                    missingFields.push("city");
+
+                if (!country)
+                    missingFields.push("country");
+
+                if (!personal_email)
+                    missingFields.push("personal_email");
+
+                if (!phone)
+                    missingFields.push("phone");
+
+                if (!company_type)
+                    missingFields.push("company_type");
+
+                if (!company_industry)
+                    missingFields.push("company_industry");
+
+                if (missingFields.length > 0) {
+
+                    errors.push(
+                        `${identifier}: Missing → ${missingFields.join(", ")}`
+                    );
+
+                    stream.resume();
+
+                    return;
+                }
+
+                // ✅ Duplicate inside file
+                const uniqueKey =
+                    `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
+
+                if (seen.has(uniqueKey)) {
+
+                    duplicates.push(
+                        `${identifier}: Duplicate inside uploaded file`
+                    );
+
+                    stream.resume();
+
+                    return;
+                }
+
+                seen.add(uniqueKey);
+
+                // ✅ Add to batch
+                batch.push({
+
+                    first_name,
+                    last_name,
+                    designation,
+
+                    personal_email,
+                    business_email,
+                    phone,
+
+                    city,
+                    state,
+                    country,
+
+                    linkedin_id,
+                    linkedin_url,
+
+                    description:
+                        description || null,
+
+                    company_name,
+                    company_email,
+                    company_phone,
+
+                    company_type,
+                    company_industry,
+
+                    company_address,
+                    company_website,
+
+                    company_city,
+                    company_state,
+                    company_country,
+
+                    company_linkedin_url,
+                    company_founded,
+                    company_description,
+
+                    adminId: req.adminId
+                });
+
+                // ✅ Batch insert
+                if (batch.length >= BATCH_SIZE) {
+
+                    await processBatch();
+                }
+
+            } catch (err) {
+
+                console.log(err);
+            }
+
+            stream.resume();
+        });
+
+        stream.on("end", async () => {
+
+            try {
+
+                // ✅ Final batch
+                await processBatch();
+
+                console.log("🎉 Upload completed");
+
+                // ✅ Delete uploaded file
+                if (
+                    req.file?.path &&
+                    fs.existsSync(req.file.path)
+                ) {
+
+                    fs.unlinkSync(req.file.path);
+
+                    console.log(
+                        "🗑 Uploaded file deleted"
+                    );
+                }
+
+                return res.json({
+
+                    msg: "Upload completed ✅",
+
+                    inserted: insertedCount,
+
+                    errorsCount: errors.length,
+
+                    duplicateCount: duplicates.length,
+
+                    errors,
+
+                    duplicates
+                });
+
+            } catch (err) {
+
+                console.log(err);
+
+                return res.status(500).json({
+                    msg: "Final batch failed ❌"
+                });
+            }
+        });
+
+        stream.on("error", (err) => {
+
+            console.log("💥 Stream Error:", err);
+
+            return res.status(500).json({
+                msg: "CSV processing failed ❌"
+            });
         });
 
     } catch (err) {
 
         console.log("💥 Upload Error:", err);
-        
+
+        if (
+            req.file?.path &&
+            fs.existsSync(req.file.path)
+        ) {
+
+            fs.unlinkSync(req.file.path);
+        }
+
         return res.status(500).json({
             msg: "Upload failed ❌",
             error: err.message
