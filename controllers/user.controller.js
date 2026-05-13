@@ -284,7 +284,9 @@ const getUserStatus = async (req, res) => {
 const deductCredit = async (req, res) => {
     try {
         const userId = req.userId;
-        const { employeeId } = req.body;
+
+        // 👇 take dynamic credits from frontend
+        const { credits } = req.body;
 
         if (!userId) {
             return res.status(401).json({ success: false, msg: "Unauthorized" });
@@ -296,16 +298,31 @@ const deductCredit = async (req, res) => {
             return res.status(404).json({ success: false, msg: "User not found" });
         }
 
-        if (user.credits <= 0) {
-            return res.status(400).json({ success: false, msg: "No credits" });
+        // ❗ validation
+        if (!credits || credits <= 0) {
+            return res.status(400).json({
+                success: false,
+                msg: "Invalid credit value"
+            });
         }
 
-        user.credits -= 1;
+        // ❗ not enough credits check
+        if (user.credits < credits) {
+            return res.status(400).json({
+                success: false,
+                msg: `Not enough credits. Available: ${user.credits}`
+            });
+        }
+
+        // ✅ dynamic deduction
+        user.credits -= credits;
+
         await user.save();
 
         return res.json({
             success: true,
-            credits: user.credits
+            credits: user.credits,
+            deducted: credits
         });
 
     } catch (err) {
