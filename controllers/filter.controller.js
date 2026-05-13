@@ -90,17 +90,27 @@ const tokenize = (text) => {
 ========================= */
 export const searchData = async (req, res) => {
     try {
+
         const {
             query = "",
             country = "",
             state = "",
             city = "",
             designation = "",
-            industry = ""
+            industry = "",
+            page = 1,
+            limit = 50
         } = req.query;
 
         console.log("🔥 Incoming Query:", query);
-        console.log("🎯 Filters:", { country, state, city, designation, industry });
+
+        console.log("🎯 Filters:", {
+            country,
+            state,
+            city,
+            designation,
+            industry
+        });
 
         const STOP_WORDS = new Set([
             "i", "want", "looking", "for", "in", "the", "at", "to", "a", "an",
@@ -110,90 +120,204 @@ export const searchData = async (req, res) => {
             "that", "this", "list", "show", "me", "all", "any", "some"
         ]);
 
+        /* =======================================================
+           CLEAN TOKENS
+        ======================================================= */
+
         const tokens = query
             .toLowerCase()
             .replace(/[^a-z0-9\s]/g, " ")
             .split(/\s+/)
-            .filter(w => w && !STOP_WORDS.has(w));
+            .filter(word => word && !STOP_WORDS.has(word));
+
+        console.log("🧠 TOKENS:", tokens);
 
         const escapeRegex = (text) =>
             text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-        /* ================= STEP 1: GET ALL DATA ================= */
-        const employees = await Employee.find({});
+        /* =======================================================
+           BUILD QUERY
+        ======================================================= */
 
-        console.log("📦 TOTAL:", employees.length);
+        const andConditions = [];
 
-        /* ================= STEP 2: AND FILTER LOGIC ================= */
-        const finalResults = employees.filter(emp => {
+        /* ---------------- QUERY TOKENS (AND LOGIC) ---------------- */
 
-            const text = [
-                emp.first_name,
-                emp.last_name,
-                emp.designation,
-                emp.company_name,
-                emp.company_industry,
-                emp.city,
-                emp.state,
-                emp.country
-            ].join(" ").toLowerCase();
+        tokens.forEach(token => {
 
-            /* ---------------- QUERY CONDITION (AND) ---------------- */
-            const queryMatch =
-                tokens.length === 0 ||
-                tokens.every(t => text.includes(t));  // 🔥 AND logic
+            const regex = new RegExp(escapeRegex(token), "i");
 
-            /* ---------------- FILTER CONDITION (AND) ---------------- */
-            const filterMatch =
-                (!country || new RegExp(escapeRegex(country), "i").test(emp.country)) &&
-                (!state || new RegExp(escapeRegex(state), "i").test(emp.state)) &&
-                (!city || new RegExp(escapeRegex(city), "i").test(emp.city)) &&
-                (!designation || new RegExp(escapeRegex(designation), "i").test(emp.designation)) &&
-                (!industry || new RegExp(escapeRegex(industry), "i").test(emp.company_industry));
-
-            /* ---------------- FINAL AND ---------------- */
-            return queryMatch && filterMatch;   // 🔥 MAIN FIX
+            andConditions.push({
+                $or: [
+                    { first_name: regex },
+                    { last_name: regex },
+                    { designation: regex },
+                    { company_name: regex },
+                    { company_industry: regex },
+                    { city: regex },
+                    { state: regex },
+                    { country: regex }
+                ]
+            });
 
         });
 
-        console.log("🎯 FINAL RESULTS:", finalResults.length);
+        /* ---------------- FILTERS ---------------- */
+
+        if (country) {
+            andConditions.push({
+                country: new RegExp(escapeRegex(country), "i")
+            });
+        }
+
+        if (state) {
+            andConditions.push({
+                state: new RegExp(escapeRegex(state), "i")
+            });
+        }
+
+        if (city) {
+            andConditions.push({
+                city: new RegExp(escapeRegex(city), "i")
+            });
+        }
+
+        if (designation) {
+            andConditions.push({
+                designation: new RegExp(escapeRegex(designation), "i")
+            });
+        }
+
+        if (industry) {
+            andConditions.push({
+                company_industry: new RegExp(escapeRegex(industry), "i")
+            });
+        }
+
+        /* =======================================================
+           FINAL MONGO QUERY
+        ======================================================= */
+
+        const mongoQuery =
+            andConditions.length > 0
+                ? { $and: andConditions }
+                : {};
+
+        console.log(
+            "🔥 Mongo Query:",
+            JSON.stringify(mongoQuery, null, 2)
+        );
+
+        /* =======================================================
+           PAGINATION
+        ======================================================= */
+
+        const pageNumber = Math.max(parseInt(page), 1);
+
+        const limitNumber = Math.min(
+            Math.max(parseInt(limit), 1),
+            100
+        );
+
+        const skip = (pageNumber - 1) * limitNumber;
+
+        /* =======================================================
+           DATABASE SEARCH
+        ======================================================= */
+
+        const [finalResults, totalResults] = await Promise.all([
+
+            Employee.find(mongoQuery)
+                .skip(skip)
+                .limit(limitNumber)
+                .lean(),
+
+            Employee.countDocuments(mongoQuery)
+
+        ]);
+
+        console.log("🎯 RESULTS:", finalResults.length);
+        console.log("📦 TOTAL RESULTS:", totalResults);
+
+        /* =======================================================
+           SAVE SEARCH HISTORY
+        ======================================================= */
 
         const userId = req.userId;
 
         console.log("👤 USER ID:", userId);
 
-        if (userId && finalResults.length > 0 && query.trim()) {
+        if (userId && query.trim()) {
 
-            const lastSearch = await SearchHistory.findOne({ userId })
-                .sort({ createdAt: -1 });
+            const normalizedQuery = query.trim().toLowerCase();
 
-            const isSameQuery =
-                lastSearch?.query?.trim().toLowerCase() === query.trim().toLowerCase();
+            const existingSearch = await SearchHistory.findOne({
+                userId,
+                query: normalizedQuery
+            });
 
-            if (!isSameQuery) {
+            if (existingSearch) {
+
+                /* UPDATE EXISTING SEARCH */
+
+                await SearchHistory.updateOne(
+                    { _id: existingSearch._id },
+                    {
+                        $set: {
+                            resultCount: totalResults,
+                            updatedAt: new Date()
+                        },
+                        $inc: {
+                            searchCount: 1
+                        }
+                    }
+                );
+
+                console.log("🟡 SEARCH HISTORY UPDATED");
+
+            } else {
+
+                /* CREATE NEW SEARCH */
+
                 await SearchHistory.create({
                     userId,
-                    query,
-                    resultCount: finalResults.length
+                    query: normalizedQuery,
+                    originalQuery: query,
+                    resultCount: totalResults,
+                    searchCount: 1
                 });
 
                 console.log("🟢 SEARCH HISTORY SAVED");
-            } else {
-                console.log("🟡 DUPLICATE QUERY SKIPPED");
+
             }
         }
 
-        return res.json({
+        /* =======================================================
+           RESPONSE
+        ======================================================= */
+
+        return res.status(200).json({
             success: true,
+
+            pagination: {
+                currentPage: pageNumber,
+                totalPages: Math.ceil(totalResults / limitNumber),
+                totalResults,
+                limit: limitNumber
+            },
+
             data: finalResults
         });
 
     } catch (err) {
         console.log("❌ ERROR:", err);
-        res.status(500).json({
+
+        return res.status(500).json({
             success: false,
-            msg: "Search failed"
+            msg: "Search failed",
+            error: err.message
         });
+
     }
 };
 
