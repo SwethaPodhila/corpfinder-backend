@@ -214,10 +214,12 @@ export const searchData = async (req, res) => {
 
         const pageNumber = Math.max(parseInt(page), 1);
 
-        const limitNumber = Math.min(
-            Math.max(parseInt(limit), 1),
-            100
-        );
+        /* const limitNumber = Math.min(
+             Math.max(parseInt(limit), 1),
+             100
+         );*/
+
+        const limitNumber = Math.max(parseInt(limit), 1);
 
         const skip = (pageNumber - 1) * limitNumber;
 
