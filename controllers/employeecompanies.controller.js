@@ -66,69 +66,65 @@ export const uploadEmployees = async (req, res) => {
         if (!req.file) {
 
             return res.status(400).json({
-                msg: "No file uploaded ❌"
+                msg: "No file uploaded ❗"
             });
         }
 
         console.log("✅ File received:", req.file.originalname);
 
+        const errors = [];
+        const duplicates = [];
+
         let insertedCount = 0;
-        let duplicateCount = 0;
-        let errorsCount = 0;
 
         let batch = [];
 
-        const BATCH_SIZE = 500;
+        const seen = new Set();
+
+        const BATCH_SIZE = 1000;
 
         const clean = (val) =>
-            val?.toString().trim() || null;
+            val?.toString().trim();
 
-        // ✅ Batch Insert Function
+        // ✅ Process Batch Function
         const processBatch = async () => {
 
             if (batch.length === 0) return;
 
             try {
 
-                const result = await Employee.insertMany(
-                    batch,
-                    {
+                const inserted =
+                    await Employee.insertMany(batch, {
                         ordered: false
-                    }
-                );
+                    });
 
-                insertedCount += result.length;
+                insertedCount += inserted.length;
 
                 console.log(
-                    `✅ Batch inserted: ${result.length}`
+                    `✅ Batch inserted: ${inserted.length}`
                 );
 
             } catch (err) {
 
-                // ✅ Handle duplicates
                 if (err.writeErrors) {
 
-                    duplicateCount +=
-                        err.writeErrors.length;
+                    duplicates.push(
+                        ...err.writeErrors.map(
+                            (e) =>
+                                e.errmsg || "Duplicate skipped"
+                        )
+                    );
 
                     insertedCount +=
-                        err.result?.result?.nInserted ||
-                        0;
-
-                    console.log(
-                        `⚠️ Duplicates skipped: ${err.writeErrors.length}`
-                    );
+                        err.result?.nInserted || 0;
 
                 } else {
 
-                    console.log(
-                        "💥 Batch Insert Error:",
-                        err.message
-                    );
+                    console.log(err);
                 }
             }
 
-            // ✅ Clear memory
+            // ✅ clear memory
             batch = [];
         };
 
@@ -229,27 +225,68 @@ export const uploadEmployees = async (req, res) => {
                 const company_description =
                     clean(item.company_description);
 
-                // ✅ Validation
-                if (
-                    !first_name ||
-                    !designation ||
-                    !company_name ||
-                    !city ||
-                    !country ||
-                    !personal_email ||
-                    !phone ||
-                    !company_type ||
-                    !company_industry
-                ) {
+                const identifier =
+                    `${first_name || "Unknown"} (${business_email || "No Email"})`;
 
-                    errorsCount++;
+                // ✅ Validation
+                const missingFields = [];
+
+                if (!first_name)
+                    missingFields.push("first_name");
+
+                if (!designation)
+                    missingFields.push("designation");
+
+                if (!company_name)
+                    missingFields.push("company_name");
+
+                if (!city)
+                    missingFields.push("city");
+
+                if (!country)
+                    missingFields.push("country");
+
+                if (!personal_email)
+                    missingFields.push("personal_email");
+
+                if (!phone)
+                    missingFields.push("phone");
+
+                if (!company_type)
+                    missingFields.push("company_type");
+
+                if (!company_industry)
+                    missingFields.push("company_industry");
+
+                if (missingFields.length > 0) {
+
+                    errors.push(
+                        `${identifier}: Missing → ${missingFields.join(", ")}`
+                    );
 
                     stream.resume();
 
                     return;
                 }
 
-                // ✅ Push to batch
+                // ✅ Duplicate inside file
+                const uniqueKey =
+                    `${first_name}-${designation}-${company_name}-${city}-${state}-${country}`.toLowerCase();
+
+                if (seen.has(uniqueKey)) {
+
+                    duplicates.push(
+                        `${identifier}: Duplicate inside uploaded file`
+                    );
+
+                    stream.resume();
+
+                    return;
+                }
+
+                seen.add(uniqueKey);
+
+                // ✅ Add to batch
                 batch.push({
 
                     first_name,
@@ -267,7 +304,8 @@ export const uploadEmployees = async (req, res) => {
                     linkedin_id,
                     linkedin_url,
 
-                    description,
+                    description:
+                        description || null,
 
                     company_name,
                     company_email,
@@ -290,7 +328,7 @@ export const uploadEmployees = async (req, res) => {
                     adminId: req.adminId
                 });
 
-                // ✅ Insert batch
+                // ✅ Batch insert
                 if (batch.length >= BATCH_SIZE) {
 
                     await processBatch();
@@ -298,23 +336,17 @@ export const uploadEmployees = async (req, res) => {
 
             } catch (err) {
 
-                console.log(
-                    "💥 Row Processing Error:",
-                    err.message
-                );
-
-                errorsCount++;
+                console.log(err);
             }
 
             stream.resume();
         });
 
-        // ✅ Stream End
         stream.on("end", async () => {
 
             try {
 
-                // ✅ Final Batch
+                // ✅ Final batch
                 await processBatch();
 
                 console.log("🎉 Upload completed");
@@ -332,67 +364,44 @@ export const uploadEmployees = async (req, res) => {
                     );
                 }
 
-                return res.status(200).json({
-
-                    success: true,
+                return res.json({
 
                     msg: "Upload completed ✅",
 
                     inserted: insertedCount,
 
-                    duplicates: duplicateCount,
+                    errorsCount: errors.length,
 
-                    errors: errorsCount
+                    duplicateCount: duplicates.length,
+
+                    errors,
+
+                    duplicates
                 });
 
             } catch (err) {
 
-                console.log(
-                    "💥 Final Batch Error:",
-                    err.message
-                );
+                console.log(err);
 
                 return res.status(500).json({
-
-                    success: false,
-
                     msg: "Final batch failed ❌"
                 });
             }
         });
 
-        // ✅ Stream Error
-        stream.on("error", async (err) => {
+        stream.on("error", (err) => {
 
-            console.log(
-                "💥 Stream Error:",
-                err.message
-            );
-
-            if (
-                req.file?.path &&
-                fs.existsSync(req.file.path)
-            ) {
-
-                fs.unlinkSync(req.file.path);
-            }
+            console.log("💥 Stream Error:", err);
 
             return res.status(500).json({
-
-                success: false,
-
                 msg: "CSV processing failed ❌"
             });
         });
 
     } catch (err) {
 
-        console.log(
-            "💥 Upload Error:",
-            err.message
-        );
+        console.log("💥 Upload Error:", err);
 
-        // ✅ Delete uploaded file
         if (
             req.file?.path &&
             fs.existsSync(req.file.path)
@@ -402,11 +411,7 @@ export const uploadEmployees = async (req, res) => {
         }
 
         return res.status(500).json({
-
-            success: false,
-
             msg: "Upload failed ❌",
-
             error: err.message
         });
     }
