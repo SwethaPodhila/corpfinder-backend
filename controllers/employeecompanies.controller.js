@@ -57,7 +57,7 @@ export const addEmployee = async (req, res) => {
     }
 };
 
-const uploadEmployees = async (req, res) => {
+export const uploadEmployees = async (req, res) => {
 
     try {
 
