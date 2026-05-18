@@ -2,6 +2,7 @@ import { PLAN_CONFIG } from "./planConfig.js";
 
 export const activatePlan = async (user, planName) => {
     try {
+
         const plan = PLAN_CONFIG[planName];
 
         if (!plan) {
@@ -13,16 +14,26 @@ export const activatePlan = async (user, planName) => {
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + plan.durationDays);
 
+        // =========================
+        // UPDATE PLAN INFO
+        // =========================
+
         user.planName = planName;
         user.planStartDate = now;
         user.planEndDate = endDate;
-        user.credits = plan.credits;
+
+        // =========================
+        // ADD CREDITS (NOT RESET)
+        // =========================
+
+        user.credits = (user.credits || 0) + plan.credits;
 
         await user.save();
 
         console.log("✅ PLAN UPDATED:", {
             planName,
-            credits: plan.credits,
+            addedCredits: plan.credits,
+            totalCredits: user.credits,
             start: now,
             end: endDate
         });
