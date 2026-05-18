@@ -396,10 +396,35 @@ export const uploadEmployees = async (req, res) => {
 
 export const getEmployees = async (req, res) => {
     try {
-        const employees = await Employee.find({ adminId: req.adminId })
-            .sort({ createdAt: -1 });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || "";
 
-        res.json({ count: employees.length, employees });
+        const skip = (page - 1) * limit;
+
+        const query = {
+            adminId: req.adminId,
+            $or: [
+                { first_name: { $regex: search, $options: "i" } },
+                { last_name: { $regex: search, $options: "i" } },
+                { company_name: { $regex: search, $options: "i" } },
+                { personal_email: { $regex: search, $options: "i" } }
+            ]
+        };
+
+        const employees = await Employee.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        const total = await Employee.countDocuments(query);
+
+        res.json({
+            employees,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        });
 
     } catch (err) {
         console.log(err);

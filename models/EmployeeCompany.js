@@ -65,7 +65,7 @@ const employeeSchema = new mongoose.Schema({
         default: null
     },
 
-    // 🏢 Company Details (FULL — emi miss kaledu)
+    // 🏢 Company Details
     company_name: {
         type: String,
         required: true,
@@ -95,14 +95,14 @@ const employeeSchema = new mongoose.Schema({
         type: String
     },
 
-    // 📞 Company Contact (REQUIRED)
+    // 📞 Company Contact
     company_phone: {
         type: String,
-        required: false //this is required
+        required: false
     },
     company_email: {
         type: String,
-        required: false  //this is required
+        required: false
     },
 
     company_linkedin_url: {
@@ -124,7 +124,7 @@ const employeeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// ✅ UNIQUE COMPOUND INDEX
+/* ✅ UNIQUE COMPOUND INDEX */
 employeeSchema.index({
     first_name: 1,
     designation: 1,
@@ -134,6 +134,12 @@ employeeSchema.index({
     country: 1
 }, {
     unique: true
+});
+
+/* ⚡ PERFORMANCE INDEX (NEW) */
+employeeSchema.index({
+    adminId: 1,
+    createdAt: -1
 });
 
 export default mongoose.model("Employee", employeeSchema);
