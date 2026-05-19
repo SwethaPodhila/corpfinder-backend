@@ -5,7 +5,7 @@ const { createSubscription } = require("../controllers/paymentController12.js");
 const { verifyUser } = require("../middleware/auth");
 
 // ✅ normal API
-router.post("/create-order", verifyUser, createOrder);
+router.post("/create-order", verifyUser, createSubscription);
 
 // 🔥 FIXED webhook route
 //router.post("/webhook", cashfreeWebhook);
