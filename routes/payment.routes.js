@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { createOrder } = require("../controllers/payment.controller");
+const { createSubscription } = require("../controllers/paymentController12.js");
 const { verifyUser } = require("../middleware/auth");
 
 // ✅ normal API
