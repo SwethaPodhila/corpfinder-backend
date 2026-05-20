@@ -56,7 +56,7 @@ const createSubscription = async (req, res) => {
 
             subscription_meta: {
                 return_url:
-                    "https://your-frontend-url.com/success"
+                    "https://corpfinder-frontend.onrender.com/success"
             },
 
             plan_info: {
@@ -71,7 +71,7 @@ const createSubscription = async (req, res) => {
 
         // direct API call
         const response = await axios.post(
-            "https://sandbox.cashfree.com/pg/subscriptions",
+            "https://api.cashfree.com/pg/subscriptions",
             request,
             {
                 headers: {
