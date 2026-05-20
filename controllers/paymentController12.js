@@ -54,18 +54,13 @@ const createSubscription = async (req, res) => {
                 customer_phone: user.phone || "9999999999"
             },
 
+            plan_details: {
+                plan_id: plan.cashfreePlanId
+            },
+
             subscription_meta: {
                 return_url:
                     "https://corpfinder-frontend.onrender.com/success"
-            },
-
-            plan_info: {
-                plan_name: planName,
-                plan_type: "PERIODIC",
-                plan_max_cycles: 0,
-                plan_recurring_amount: plan.price,
-                plan_interval_type: "MONTH",
-                plan_intervals: 1
             }
         };
 
