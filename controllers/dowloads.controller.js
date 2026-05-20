@@ -12,7 +12,7 @@ const getPlanLimit = (planName) => {
 
         case "premium":
             return {
-                limit: 1000,
+                limit: 500,
                 type: "day"
             };
 
