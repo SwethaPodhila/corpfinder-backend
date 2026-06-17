@@ -13,7 +13,8 @@ app.use(
     cors({
         origin: [
             "http://localhost:3000",
-            "https://corpfinder-frontend.onrender.com"
+            "https://corpfinder-frontend.onrender.com",
+            "https://growmatrix.biz"
         ],
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
