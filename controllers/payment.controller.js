@@ -40,10 +40,16 @@ const createOrder = async (req, res) => {
             order_id: orderId,
             order_amount: amountInINR,
             order_currency: "INR",
+
             customer_details: {
                 customer_id: user._id.toString(),
                 customer_email: user.email,
                 customer_phone: user.phone || "9999999999"
+            },
+
+            order_meta: {
+                return_url:
+                    "https://growmatrix.biz/dashboard/subscription"
             }
         };
 
@@ -117,7 +123,7 @@ const cashfreeWebhook = async (req, res) => {
         }
 
         const isValid = verifySignature(rawBody, signature, timestamp);
- 
+
         if (!isValid) {
             console.log("❌ FINAL RESULT: Invalid webhook signature");
             return res.sendStatus(401);
