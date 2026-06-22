@@ -8,6 +8,7 @@ router.post("/register", userController.register);
 router.post("/verify-otp", userController.verifyOtp);
 router.post("/resend-otp", userController.resendOtp);
 router.post("/login", userController.login);
+router.post("/contact", userController.contact); // 🔥 NEW contact route
 router.get("/users", userController.getUsers); // 🔥 GET all users
 router.get("/status", verifyUser, userController.getUserStatus); // 🔥 GET current user's plan & credit
 router.post("/deduct-credits", verifyUser, userController.deductCredit); // 🔥 DEDUCT credits after each use

@@ -347,6 +347,56 @@ const getUsers = async (req, res) => {
     }
 };
 
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
+const contact = async (req, res) => {
+    const { name, email, subject, message } = req.body;
+
+    try {
+        // 1️⃣ ADMIN EMAIL
+        await transporter.sendMail({
+            from: email,
+            to: process.env.ADMIN_EMAIL,
+            subject: `New Contact Form: ${subject}`,
+            html: `
+        <h3>New Message from CorpFinder</h3>
+        <p><b>Name:</b> ${name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Subject:</b> ${subject}</p>
+        <p><b>Message:</b> ${message}</p>
+      `,
+        });
+
+        // 2️⃣ USER CONFIRMATION EMAIL
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "We received your message",
+            html: `
+        <h3>Hi ${name},</h3>
+        <p>Thanks for contacting CorpFinder.</p>
+        <p>We received your message and will reply within 24 hours.</p>
+        <br/>
+        <p><b>Your message:</b></p>
+        <p>${message}</p>
+      `,
+        });
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error(error);
+        res.json({ success: false });
+    }
+};
+
+
 module.exports = {
     register,
     verifyOtp,
@@ -354,5 +404,6 @@ module.exports = {
     login,
     getUsers,
     getUserStatus,
-    deductCredit
+    deductCredit,
+    contact
 };
