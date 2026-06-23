@@ -6,7 +6,7 @@ const Payment = require("../models/payment");
 const crypto = require("crypto");
 
 // 💱 simple conversion (you can replace with real FX API later)
-const USD_TO_INR = 1;
+const USD_TO_INR = 94.65;
 
 const CASHFREE_SECRET = process.env.CF_SECRET_KEY || "your_cashfree_secret_here";
 
