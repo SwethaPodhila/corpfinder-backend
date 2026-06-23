@@ -396,6 +396,61 @@ const contact = async (req, res) => {
     }
 };
 
+const getUserProfile = async (req, res) => {
+    try {
+        const userId = req.userId; // from auth middleware
+
+        const user = await User.findById(userId).select("-password -otp -otpExpiry");
+
+        if (!user) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        res.json({ user });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ msg: "Server error" });
+    }
+};
+
+const updateUserProfile = async (req, res) => {
+    try {
+        const userId = req.userId;
+
+        const { fullName, email, phone } = req.body;
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ msg: "User not found" });
+        }
+
+        // update only allowed fields
+        if (fullName) user.fullName = fullName;
+        if (email) user.email = email;
+        if (phone) user.phone = phone;
+
+        await user.save();
+
+        res.json({
+            msg: "Profile updated successfully",
+            user: {
+                _id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                phone: user.phone,
+                planName: user.planName,
+                credits: user.credits,
+                status: user.status
+            }
+        });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ msg: "Server error" });
+    }
+};
 
 module.exports = {
     register,
@@ -405,5 +460,7 @@ module.exports = {
     getUsers,
     getUserStatus,
     deductCredit,
-    contact
+    contact,
+    getUserProfile,
+    updateUserProfile
 };
