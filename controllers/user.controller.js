@@ -462,5 +462,4 @@ module.exports = {
     deductCredit,
     contact,
     getUserProfile,
-    updateUserProfile
 };
