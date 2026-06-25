@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 dotenv.config();
 
@@ -83,6 +84,7 @@ const register = async (req, res) => {
         return res.status(500).json({ msg: err.message });
     }
 };
+
 
 // ================= VERIFY OTP =================
 const verifyOtp = async (req, res) => {
@@ -452,6 +454,109 @@ const updateUserProfile = async (req, res) => {
     }
 };
 
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({ email: email });
+
+        if (!user) {
+            return res.status(404).json({
+                msg: "User not found"
+            });
+        }
+
+        // 🔐 generate token
+        const token = crypto.randomBytes(32).toString("hex");
+
+        // save token + expiry
+        user.resetPasswordToken = token;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+
+        await user.save();
+
+        // 🔗 reset link (frontend route)
+        const resetLink = `https://aiwingsglobal.com/reset-password/${token}`;
+
+        // 📧 mail setup
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+
+        await transporter.sendMail({
+            from: process.env.EMAIL,
+            to: email,
+            subject: "Password Reset Request",
+            html: `
+                <h2>Password Reset</h2>
+                <p>Click below link to reset password:</p>
+                <a href="${resetLink}">Reset Password</a>
+                <p>This link will expire in 1 hour.</p>
+            `
+        });
+
+        res.json({
+            msg: "Reset link sent to email"
+        });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            msg: "Server Error"
+        });
+    }
+};
+
+const resetPassword = async (req, res) => {
+    try {
+        const { token } = req.params;
+        const { password } = req.body;
+
+        // 1. find user with token
+        const user = await User.findOne({
+            resetPasswordToken: token
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                msg: "Invalid token"
+            });
+        }
+
+        // 2. check expiry
+        if (user.resetPasswordExpires < Date.now()) {
+            return res.status(400).json({
+                msg: "Token expired"
+            });
+        }
+
+        // 3. hash new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        user.password = hashedPassword;
+
+        // 4. clear token fields
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+
+        await user.save();
+
+        res.json({
+            msg: "Password reset successful"
+        });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({
+            msg: "Server error"
+        });
+    }
+};
+
 module.exports = {
     register,
     verifyOtp,
@@ -462,4 +567,6 @@ module.exports = {
     deductCredit,
     contact,
     getUserProfile,
+    forgotPassword,
+    resetPassword,
 };

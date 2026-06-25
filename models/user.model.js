@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema({
     fullName: String,
     email: { type: String, unique: true },
     phone: String,
-    password: String, 
+    password: String,
 
     isVerified: { type: Boolean, default: false },
 
@@ -20,10 +20,11 @@ const userSchema = new mongoose.Schema({
 
     planStartDate: Date,
     planEndDate: Date,
-
     lastCreditReset: Date,
+    trialEndsAt: Date,
 
-    trialEndsAt: Date
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
 });
 
 module.exports = mongoose.model("User", userSchema);

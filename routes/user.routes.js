@@ -7,7 +7,8 @@ const { verifyUser } = require("../middleware/auth");
 router.post("/register", userController.register);
 router.post("/verify-otp", userController.verifyOtp);
 router.post("/resend-otp", userController.resendOtp);
-router.put("/update-profile", verifyUser, userController.updateUserProfile); // 🔥 UPDATE current user's profile
+router.post("/forgot-password", userController.forgotPassword);
+router.post("/reset-password/:token", userController.resetPassword); 
 
 router.post("/login", userController.login);
 router.post("/contact", userController.contact); // 🔥 NEW contact route
