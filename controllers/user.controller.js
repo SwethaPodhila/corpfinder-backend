@@ -476,7 +476,7 @@ const forgotPassword = async (req, res) => {
         await user.save();
 
         // 🔗 reset link (frontend route)
-        const resetLink = `https://aiwingsglobal.com/reset-password/${token}`;
+        const resetLink = `https://growmatrix.biz/reset-password/${token}`;
 
         // 📧 mail setup
         const transporter = nodemailer.createTransport({
